@@ -1,0 +1,307 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LLVM_VERSION: "22"
+
+jobs:
+  platform-build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64-clang22
+            os: ubuntu-latest
+          - name: windows-x86_64-clang22
+            os: windows-latest
+          - name: macos-arm64-clang22
+            os: macos-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up LLVM/Clang 22
+        uses: ZhongRuoyu/setup-llvm@v0
+        with:
+          llvm-version: ${{ env.LLVM_VERSION }}
+
+      - name: Select Homebrew LLVM 22 on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: echo "$(brew --prefix llvm@22)/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Clang version on Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang --version
+          clang++ --version
+          major="$(clang++ --version | sed -n 's/.*version \([0-9][0-9]*\).*/\1/p' | head -1)"
+          test -n "$major" && test "$major" -ge 22
+
+      - name: Verify Clang version on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          # Multiple LLVM installations can expose clang-cl.  Select the first
+          # PATH-resolved executable rather than expanding every matching path.
+          $clangCl = (Get-Command clang-cl -CommandType Application -ErrorAction Stop | Select-Object -First 1 -ExpandProperty Source)
+          & $clangCl --version
+          $line = (& $clangCl --version | Select-Object -First 1)
+          if ($line -notmatch 'version ([0-9]+)') { throw "Unable to determine Clang version" }
+          if ([int]$Matches[1] -lt 22) { throw "Clang 22+ is required, found $line" }
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build libcurl4-openssl-dev libssl-dev nlohmann-json3-dev
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew install nlohmann-json openssl@3
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix nlohmann-json):$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+
+      - name: Install Windows dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT 'vcpkg.exe'
+          & $vcpkg install curl nlohmann-json openssl --triplet x64-windows
+
+      - name: Configure Linux Clang build
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCPPMINER_REQUIRE_CLANG=ON \
+            -DCPPMINER_BUILD_FUZZING=OFF \
+            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/staging"
+
+      - name: Configure macOS Clang build
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          set -euo pipefail
+          sysroot="$(xcrun --sdk macosx --show-sdk-path)"
+          test -d "$sysroot"
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCPPMINER_REQUIRE_CLANG=ON \
+            -DCPPMINER_BUILD_FUZZING=OFF \
+            -DCMAKE_OSX_SYSROOT="$sysroot" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/staging"
+
+      - name: Configure Windows Clang build
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CC: clang-cl
+          CXX: clang-cl
+        run: |
+          Set-StrictMode -Version Latest
+          # Use Clang's MSVC-compatible driver explicitly.  This keeps C, C++,
+          # and ASM compilation on LLVM while remaining ABI-compatible with
+          # the x64-windows libraries supplied by vcpkg.
+          $clangCl = (Get-Command clang-cl -CommandType Application -ErrorAction Stop | Select-Object -First 1 -ExpandProperty Source)
+          $toolchain = Join-Path $env:VCPKG_INSTALLATION_ROOT 'scripts/buildsystems/vcpkg.cmake'
+          cmake -S . -B build -G Ninja `
+            "-DCMAKE_C_COMPILER=$clangCl" `
+            "-DCMAKE_CXX_COMPILER=$clangCl" `
+            "-DCMAKE_ASM_COMPILER=$clangCl" `
+            "-DCMAKE_TOOLCHAIN_FILE=$toolchain" `
+            '-DVCPKG_TARGET_TRIPLET=x64-windows' `
+            '-DCMAKE_BUILD_TYPE=Release' `
+            '-DCPPMINER_REQUIRE_CLANG=ON' `
+            '-DCPPMINER_BUILD_FUZZING=OFF' `
+            "-DCMAKE_INSTALL_PREFIX=$PWD/staging"
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --parallel
+
+      - name: Run all algorithm self-tests and smoke benchmarks on Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for algo in sha256d scrypt lyra2web randomx; do
+            ./build/cppminer --benchmark -a "$algo" --bench-seconds=0.1 --randomx-light
+          done
+
+      - name: Run all algorithm self-tests and smoke benchmarks on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          # The test binary is run from the build tree, before installation.
+          # Make the dynamically linked vcpkg runtime dependencies discoverable.
+          $vcpkgBin = Join-Path $env:VCPKG_INSTALLATION_ROOT 'installed\x64-windows\bin'
+          $env:PATH = "$vcpkgBin$([IO.Path]::PathSeparator)$env:PATH"
+          $algorithms = @('sha256d', 'scrypt', 'lyra2web', 'randomx')
+          foreach ($algo in $algorithms) {
+            .\build\cppminer.exe --benchmark -a $algo --bench-seconds=0.1 --randomx-light
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Install Unix artifact
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cmake --install build
+          cp LICENSE staging/
+          install -m 0755 scripts/run-cppminer.sh staging/run-cppminer.sh
+
+      - name: Bundle Unix runtime libraries
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/bundle-unix-runtime.sh "$(echo "$RUNNER_OS" | tr '[:upper:]' '[:lower:]')" staging
+
+      - name: Install Windows artifact
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake --install build
+          Copy-Item LICENSE staging/
+          Copy-Item scripts\run-cppminer.cmd staging\
+          $vcpkgBin = Join-Path $env:VCPKG_INSTALLATION_ROOT 'installed\x64-windows\bin'
+          Get-ChildItem $vcpkgBin -Filter *.dll -File | Copy-Item -Destination staging\bin -Force
+
+      - name: Verify packaged Unix artifact
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./staging/run-cppminer.sh --benchmark -a sha256d --bench-seconds=0.1
+
+      - name: Verify packaged Windows artifact
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\staging\run-cppminer.cmd --benchmark -a sha256d --bench-seconds=0.1
+
+      - name: Package Unix artifact
+        if: runner.os != 'Windows'
+        shell: bash
+        run: tar -C staging -czf "cppminer-${{ matrix.name }}.tar.gz" .
+
+      - name: Package Windows artifact
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path staging\* -DestinationPath "cppminer-${{ matrix.name }}.zip"
+
+      - name: Upload platform artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cppminer-${{ matrix.name }}
+          path: cppminer-${{ matrix.name }}.*
+          if-no-files-found: error
+          retention-days: 14
+
+  sanitizers-and-fuzzing:
+    name: linux-clang22-asan-ubsan-fuzz
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up LLVM/Clang 22
+        uses: ZhongRuoyu/setup-llvm@v0
+        with:
+          llvm-version: ${{ env.LLVM_VERSION }}
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build libcurl4-openssl-dev libssl-dev nlohmann-json3-dev
+
+      - name: Verify Clang 22+
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang++ --version
+          major="$(clang++ --version | sed -n 's/.*version \([0-9][0-9]*\).*/\1/p' | head -1)"
+          test -n "$major" && test "$major" -ge 22
+
+      - name: Configure sanitizer build
+        shell: bash
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          cmake -S . -B build-asan -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCPPMINER_REQUIRE_CLANG=ON \
+            -DCPPMINER_ENABLE_SANITIZERS=ON \
+            -DCPPMINER_BUILD_FUZZING=OFF
+
+      - name: Build sanitizer binary
+        shell: bash
+        run: cmake --build build-asan --parallel
+
+      - name: Run sanitizer self-tests
+        shell: bash
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:symbolize=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          set -euo pipefail
+          for algo in sha256d scrypt lyra2web randomx; do
+            ./build-asan/cppminer --benchmark -a "$algo" --bench-seconds=0.1 --randomx-light
+          done
+
+      - name: Configure fuzz build
+        shell: bash
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          cmake -S . -B build-fuzz -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCPPMINER_REQUIRE_CLANG=ON \
+            -DCPPMINER_BUILD_FUZZING=ON
+
+      - name: Build fuzz targets
+        shell: bash
+        run: cmake --build build-fuzz --parallel
+
+      - name: Run RandomX job parser fuzzing
+        shell: bash
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:symbolize=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          ./build-fuzz/randomx_job_fuzz -max_total_time=20 tests/fuzz/corpus
+
+      - name: Run multi-algorithm fuzzing
+        shell: bash
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:symbolize=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          ./build-fuzz/multi_algo_fuzz -max_total_time=30 -timeout=10 tests/fuzz/corpus
