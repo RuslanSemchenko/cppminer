@@ -296,7 +296,7 @@ jobs:
           ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:symbolize=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: |
-          ./build-fuzz/randomx_job_fuzz -max_total_time=20 tests/fuzz/corpus
+          ./build-fuzz/randomx_job_fuzz -max_total_time=1200 tests/fuzz/corpus
 
       - name: Run multi-algorithm fuzzing
         shell: bash
@@ -304,7 +304,7 @@ jobs:
           ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:symbolize=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: |
-          ./build-fuzz/multi_algo_fuzz -max_total_time=30 -timeout=10 tests/fuzz/corpus
+          ./build-fuzz/multi_algo_fuzz -max_total_time=1200 -timeout=1200 tests/fuzz/corpus
 
   release:
     name: publish-release-artifacts
