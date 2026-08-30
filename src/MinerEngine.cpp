@@ -1,6 +1,7 @@
 #include "MinerEngine.h"
 
 #include "ByteUtils.h"
+#include "ConsoleInput.h"
 #include "Log.h"
 #include "algo/Lyra2Web.h"
 #include "algo/Scrypt.h"
@@ -13,6 +14,43 @@ namespace cppminer {
 
 MinerEngine::MinerEngine(Config config) : config_(std::move(config))
 {
+}
+
+uint64_t MinerEngine::acceptedShares() const
+{
+    if (stratum_)
+        return stratum_->acceptedShares();
+    if (webchain_)
+        return webchain_->acceptedShares();
+    if (randomx_)
+        return randomx_->acceptedShares();
+    return 0;
+}
+
+uint64_t MinerEngine::rejectedShares() const
+{
+    if (stratum_)
+        return stratum_->rejectedShares();
+    if (webchain_)
+        return webchain_->rejectedShares();
+    if (randomx_)
+        return randomx_->rejectedShares();
+    return 0;
+}
+
+void MinerEngine::logHashrate(bool perThread) const
+{
+    double total = 0.0;
+    for (double h : threadHashrates_)
+        total += h;
+    logf(LogLevel::Notice, "speed: %.2f H/s, shares: %llu accepted / %llu rejected", total,
+         static_cast<unsigned long long>(acceptedShares()),
+         static_cast<unsigned long long>(rejectedShares()));
+    if (perThread) {
+        for (size_t i = 0; i < threadHashrates_.size(); ++i) {
+            logf(LogLevel::Notice, "  thread %zu: %.2f H/s", i, threadHashrates_[i]);
+        }
+    }
 }
 
 void MinerEngine::classicThreadLoop(int threadId)
@@ -71,11 +109,8 @@ void MinerEngine::classicThreadLoop(int threadId)
                          : algo::scanHashSha256d(work.header.data(), work.target.data(), maxNonce, nonce, restart,
                                                   hashesDone);
         double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        if (elapsed > 0.0) {
+        if (elapsed > 0.0)
             threadHashrates_[static_cast<size_t>(threadId)] = hashesDone / elapsed;
-            logf(LogLevel::Info, "thread %d: %llu hashes, %.2f H/s", threadId,
-                 static_cast<unsigned long long>(hashesDone), hashesDone / elapsed);
-        }
 
         if (found)
             stratum_->submitShare(work, nonce);
@@ -94,7 +129,8 @@ void MinerEngine::webchainThreadLoop(int threadId)
     uint64_t nonce = nonceRangeStart;
 
     algo::Lyra2Context ctx;
-    const uint64_t batchSize = 8; // Lyra2's ~6 MB scratch matrix makes each hash relatively expensive
+    const uint64_t simdLanes = algo::lyra2WebSimdLanes(ctx);
+    const uint64_t batchSize = simdLanes > 1 ? simdLanes * 4 : 1;
     uint8_t resultHash[32];
 
     while (!stopRequested_.load(std::memory_order_relaxed)) {
@@ -115,11 +151,8 @@ void MinerEngine::webchainThreadLoop(int threadId)
         bool found = algo::scanHashLyra2Web(ctx, work.blob, work.lyra2Tcost, work.target.data(), maxNonce, nonce,
                                              restart, hashesDone, resultHash);
         double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        if (elapsed > 0.0) {
+        if (elapsed > 0.0)
             threadHashrates_[static_cast<size_t>(threadId)] = hashesDone / elapsed;
-            logf(LogLevel::Info, "thread %d: %llu hashes, %.2f H/s", threadId,
-                 static_cast<unsigned long long>(hashesDone), hashesDone / elapsed);
-        }
 
         if (found)
             webchain_->submitShare(work, nonce, resultHash);
@@ -169,11 +202,8 @@ void MinerEngine::randomXThreadLoop(int threadId)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
             continue;
         }
-        if (elapsed > 0.0) {
+        if (elapsed > 0.0)
             threadHashrates_[static_cast<size_t>(threadId)] = hashesDone / elapsed;
-            logf(LogLevel::Info, "thread %d: %llu hashes, %.2f H/s", threadId,
-                 static_cast<unsigned long long>(hashesDone), hashesDone / elapsed);
-        }
         if (found)
             randomx_->submitShare(work, nonce, resultHash);
         if (nonce == 0xffffffffu)
@@ -236,6 +266,15 @@ void MinerEngine::run()
 
     logf(LogLevel::Notice, "starting %d miner thread(s) for algorithm %s", config_.threads,
          algorithmName(config_.algo));
+    if (config_.algo == Algorithm::Lyra2Web)
+        logf(LogLevel::Notice, "lyra2web backend: %s", algo::lyra2WebActiveBackendName());
+    if (!config_.quiet && config_.hashrateIntervalSeconds > 0)
+        logf(LogLevel::Notice, "hashrate report every %d s (press 'h' for a snapshot)", config_.hashrateIntervalSeconds);
+    else if (!config_.quiet)
+        logf(LogLevel::Notice, "press 'h' for a hashrate snapshot");
+
+    startConsoleKeyWatcher([this]() { hashrateSnapshotRequested_.store(true, std::memory_order_relaxed); });
+
     for (int i = 0; i < config_.threads; i++) {
         if (config_.algo == Algorithm::Lyra2Web)
             workers_.emplace_back(&MinerEngine::webchainThreadLoop, this, i);
@@ -256,21 +295,19 @@ void MinerEngine::run()
             break;
         }
 
-        auto now = std::chrono::steady_clock::now();
-        if (now - lastReport >= std::chrono::seconds(30)) {
-            double total = 0.0;
-            for (double h : threadHashrates_)
-                total += h;
-            uint64_t accepted = stratum_ ? stratum_->acceptedShares() :
-                                 (webchain_ ? webchain_->acceptedShares() : randomx_->acceptedShares());
-            uint64_t rejected = stratum_ ? stratum_->rejectedShares() :
-                                 (webchain_ ? webchain_->rejectedShares() : randomx_->rejectedShares());
-            logf(LogLevel::Notice, "total: %.2f H/s, shares: %llu accepted / %llu rejected", total,
-                 static_cast<unsigned long long>(accepted), static_cast<unsigned long long>(rejected));
-            lastReport = now;
+        if (hashrateSnapshotRequested_.exchange(false, std::memory_order_relaxed))
+            logHashrate(true);
+
+        if (!config_.quiet && config_.hashrateIntervalSeconds > 0) {
+            auto now = std::chrono::steady_clock::now();
+            if (now - lastReport >= std::chrono::seconds(config_.hashrateIntervalSeconds)) {
+                logHashrate(false);
+                lastReport = now;
+            }
         }
     }
 
+    stopConsoleKeyWatcher();
     stop();
 }
 

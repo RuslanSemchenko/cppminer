@@ -6,9 +6,12 @@
 // its last 8 bytes and runs Lyra2 over the whole thing (see WebchainClient
 // for how the blob/target/time-cost are obtained from the pool).
 
+#include "../BenchResult.h"
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace cppminer::simd {
@@ -46,6 +49,18 @@ private:
 // (lyra2v2-webchain, post hard-fork) or 4 (lyra2-webchain, legacy).
 void lyra2WebHash(Lyra2Context& ctx, const uint8_t* data, size_t size, uint32_t tcost, uint8_t out[32]);
 const char* lyra2WebActiveBackendName();
+
+// Parallel SIMD lane count for this context (1 for scalar).
+size_t lyra2WebSimdLanes(const Lyra2Context& ctx);
+
+// Selects the Lyra2 SIMD backend for newly created Lyra2Context objects.
+// `auto` keeps the runtime default priority; explicit values are scalar,
+// sse2, avx2 or avx512. Returns false when the name is unknown or the
+// requested instructions are unavailable on this CPU.
+bool lyra2WebSelectBackend(const std::string& name, std::string& error);
+
+// Offline per-backend hashrate comparison (scalar, SSE2, AVX2, AVX-512).
+std::vector<BackendBenchResult> lyra2WebBenchmarkBackends(double secondsPerBackend, uint32_t tcost);
 
 // Mining hot loop. `blob`'s last 8 bytes are overwritten with the
 // little-endian nonce on every attempt. `nonceInOut` is the starting nonce

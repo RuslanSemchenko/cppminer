@@ -24,12 +24,14 @@ const char kUsage[] =
     "  -r, --retries=N        connect retries, -1 = infinite (default: -1)\n"
     "  -R, --retry-pause=N    seconds between retries (default: 30)\n"
     "  -c, --config=FILE      load options from a JSON config file\n"
-    "  -q, --quiet            disable per-thread hashrate logging\n"
+    "  -q, --quiet            disable periodic hashrate reports\n"
     "  -P, --protocol-dump    verbose dump of the stratum/webchain protocol\n"
     "  -D, --debug            enable debug output\n"
     "  --no-tls-verify        disable TLS certificate/hostname verification\n"
     "  --tls-pin=KEY          pin libcurl public key (sha256//... or key file)\n"
     "  --sha256-backend=NAME  auto, scalar, sse2, avx2, avx512 or sha-ni\n"
+    "  --lyra-backend=NAME    auto, scalar, sse2, avx2 or avx512\n"
+    "  --hashrate-interval=N  seconds between hashrate reports (default: 30, 0=off)\n"
     "  --randomx-full-mem     use the faster ~2 GiB shared RandomX dataset (default)\n"
     "  --randomx-light        use the slower ~256 MiB RandomX light mode\n"
     "  --randomx-large-pages  request large pages for RandomX allocations\n"
@@ -83,6 +85,10 @@ bool applyOption(Config& cfg, const std::string& name, const std::string& value,
             cfg.tlsPin = value;
         } else if (name == "sha256-backend") {
             cfg.sha256Backend = value;
+        } else if (name == "lyra-backend") {
+            cfg.lyraBackend = value;
+        } else if (name == "hashrate-interval") {
+            cfg.hashrateIntervalSeconds = std::stoi(value);
         } else if (name == "randomx-full-mem") {
             cfg.randomxFullMemory = (value == "true" || value == "1");
         } else if (name == "randomx-large-pages") {

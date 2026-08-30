@@ -195,12 +195,14 @@ Usage: cppminer -o URL -u USER -p PASS [options]
   -r, --retries=N        Connect retries, -1 = infinite (default)
   -R, --retry-pause=N    Seconds between retries (default: 30)
   -c, --config=FILE      JSON config file
-  -q, --quiet            Disable per-thread hashrate logging
+  -q, --quiet            Disable periodic hashrate logging
   -P, --protocol-dump    Verbose protocol dump
   -D, --debug            Debug logging
   --no-tls-verify        Disable TLS certificate verification
   --tls-pin=KEY          Pin libcurl public key (sha256//… or file)
   --sha256-backend=NAME  auto, scalar, sse2, avx2, avx512, sha-ni
+  --lyra-backend=NAME    auto, scalar, sse2, avx2, avx512
+  --hashrate-interval=N  Seconds between hashrate reports (default: 30, 0=off)
   --randomx-full-mem     Full RandomX dataset (~2 GiB, default)
   --randomx-light        Light RandomX mode (~256 MiB)
   --randomx-large-pages  Request large pages for RandomX
@@ -215,7 +217,7 @@ Usage: cppminer -o URL -u USER -p PASS [options]
 | Variable | Effect |
 |----------|--------|
 | `CPPMINER_RANDOMX_PIPELINE` | Set to `0` to disable the 2-way RandomX hash pipeline (default: enabled) |
-| `CPPMINER_LYRA_BACKEND` | Force Lyra2 backend: `auto`, `scalar`, `sse2`, `avx2`, or `avx512` |
+| `CPPMINER_LYRA_BACKEND` | Force Lyra2 backend: `auto`, `scalar`, `sse2`, `avx2`, or `avx512` (overridden by `--lyra-backend`) |
 
 ## SIMD backends
 
@@ -227,6 +229,18 @@ sha256d backend: SHA-NI
 ```
 
 Each algorithm selects the best safe backend for your CPU and falls back to scalar code on older hardware. Per-backend rates are visible in `--benchmark` output.
+
+## Hashrate reporting
+
+While mining, cppminer prints a short summary line every 30 seconds by default:
+
+```
+speed: 12345.67 H/s, shares: 5 accepted / 0 rejected
+```
+
+- `--hashrate-interval=10` — change the interval (seconds); `0` disables periodic reports
+- Press **`h`** in an interactive terminal for an on-demand snapshot with per-thread rates (xmrig-style)
+- `-q` / `--quiet` — disable periodic hashrate lines (shares/errors still log; `h` still works in a TTY)
 
 ## Project layout
 

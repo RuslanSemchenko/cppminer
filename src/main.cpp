@@ -43,6 +43,14 @@ int main(int argc, char** argv)
     }
     cppminer::logf(cppminer::LogLevel::Info, "sha256d backend: %s", cppminer::algo::sha256ActiveBackendName());
 
+    std::string lyraBackendError;
+    if (!cppminer::algo::lyra2WebSelectBackend(config.lyraBackend, lyraBackendError)) {
+        cppminer::logf(cppminer::LogLevel::Error, "%s", lyraBackendError.c_str());
+        return 1;
+    }
+    if (config.algo == cppminer::Algorithm::Lyra2Web || config.benchmark)
+        cppminer::logf(cppminer::LogLevel::Info, "lyra2web backend: %s", cppminer::algo::lyra2WebActiveBackendName());
+
     if (config.benchmark)
         return cppminer::runBenchmark(config);
 

@@ -51,6 +51,7 @@ find_package(OpenSSL REQUIRED)
 set(cppminer_sources
     src/main.cpp
     src/Config.cpp
+    src/ConsoleInput.cpp
     src/Log.cpp
     src/ByteUtils.cpp
     src/Work.cpp

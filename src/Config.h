@@ -23,7 +23,7 @@ struct Config {
     // Whether -a/--algo (or the config file's "algo" key) was actually
     // given, as opposed to `algo` just holding its default value -
     // --benchmark uses this to decide whether to benchmark just that one
-    // algorithm or all three.
+    // algorithm or all four.
     bool algoExplicit = false;
 
     int threads = 0; // 0 => resolved to std::thread::hardware_concurrency()
@@ -41,6 +41,13 @@ struct Config {
 
     // SHA-256d backend: auto, scalar, sse2, avx2, avx512 or sha-ni.
     std::string sha256Backend = "auto";
+
+    // Lyra2-webchain SIMD backend: auto, scalar, sse2, avx2 or avx512.
+    std::string lyraBackend = "auto";
+
+    // Seconds between periodic hashrate summaries (0 disables). Press 'h' in an
+    // interactive terminal for an on-demand snapshot with per-thread rates.
+    int hashrateIntervalSeconds = 30;
 
     // RandomX memory mode. Full memory is the mining default (roughly 2 GiB
     // shared dataset); --randomx-light is available for constrained hosts.

@@ -256,6 +256,9 @@ int runBenchmark(const Config& config)
             anyFailed = true;
         } else {
             logf(LogLevel::Notice, "self-test OK (active backend: %s).", algo::lyra2WebActiveBackendName());
+            logf(LogLevel::Notice, "Per-backend, single-thread comparison:");
+            printBackendTable(algo::lyra2WebBenchmarkBackends(perBackendSeconds, 4),
+                               algo::lyra2WebActiveBackendName());
             double total = benchmarkMultiThreadLyra2Web(config.threads, 4, multiThreadSeconds);
             logf(LogLevel::Notice, "  realistic total with %d thread(s) (%s): %.2f H/s", config.threads,
                  algo::lyra2WebActiveBackendName(), total);

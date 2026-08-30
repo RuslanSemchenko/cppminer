@@ -5,7 +5,10 @@
 #include "../simd/CpuFeatures.h"
 #include "../simd/Lyra2Simd.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cstring>
+#include <cctype>
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
@@ -17,21 +20,125 @@
 namespace cppminer::algo {
 namespace {
 
-const char* requestedLyraBackend()
+enum class Lyra2Backend { Auto, Scalar, Sse2, Avx2, Avx512 };
+
+Lyra2Backend selectedLyraBackend = Lyra2Backend::Auto;
+
+bool parseLyraBackendName(const std::string& name, Lyra2Backend& out)
+{
+    std::string lower;
+    lower.reserve(name.size());
+    for (char c : name)
+        lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    if (lower == "auto") {
+        out = Lyra2Backend::Auto;
+        return true;
+    }
+    if (lower == "scalar") {
+        out = Lyra2Backend::Scalar;
+        return true;
+    }
+    if (lower == "sse2") {
+        out = Lyra2Backend::Sse2;
+        return true;
+    }
+    if (lower == "avx2") {
+        out = Lyra2Backend::Avx2;
+        return true;
+    }
+    if (lower == "avx512" || lower == "avx-512") {
+        out = Lyra2Backend::Avx512;
+        return true;
+    }
+    return false;
+}
+
+const char* backendName(Lyra2Backend backend)
+{
+    switch (backend) {
+    case Lyra2Backend::Auto:
+        return "auto";
+    case Lyra2Backend::Scalar:
+        return "scalar";
+    case Lyra2Backend::Sse2:
+        return "SSE2 2-way";
+    case Lyra2Backend::Avx2:
+        return "AVX2 4-way";
+    case Lyra2Backend::Avx512:
+        return "AVX-512 8-way";
+    }
+    return "unknown";
+}
+
+bool backendSupported(Lyra2Backend backend, const simd::CpuFeatures& feat)
+{
+    switch (backend) {
+    case Lyra2Backend::Auto:
+    case Lyra2Backend::Scalar:
+        return true;
+    case Lyra2Backend::Sse2:
+        return feat.sse2;
+    case Lyra2Backend::Avx2:
+        return feat.avx2;
+    case Lyra2Backend::Avx512:
+        return feat.avx512f;
+    }
+    return false;
+}
+
+Lyra2Backend effectiveLyraBackend(const simd::CpuFeatures& feat)
+{
+    if (selectedLyraBackend != Lyra2Backend::Auto)
+        return selectedLyraBackend;
+    // AVX2 is the default on CPUs that expose both ISAs: Lyra2 is
+    // memory-bound and AVX-512 may lower the core frequency enough to lose.
+    if (feat.avx2)
+        return Lyra2Backend::Avx2;
+    if (feat.avx512f)
+        return Lyra2Backend::Avx512;
+    if (feat.sse2)
+        return Lyra2Backend::Sse2;
+    return Lyra2Backend::Scalar;
+}
+
+Lyra2Backend envLyraBackendOverride()
 {
 #ifdef _WIN32
     char* value = nullptr;
     size_t length = 0;
     const bool hasValue = _dupenv_s(&value, &length, "CPPMINER_LYRA_BACKEND") == 0 && value != nullptr;
-    static thread_local std::string stored;
-    stored = hasValue ? value : "auto";
+    const std::string stored = hasValue ? value : "";
     if (value)
         free(value);
-    return stored.c_str();
+    if (stored.empty())
+        return Lyra2Backend::Auto;
+    Lyra2Backend parsed = Lyra2Backend::Auto;
+    if (!parseLyraBackendName(stored, parsed))
+        return Lyra2Backend::Auto;
+    return parsed;
 #else
     const char* value = std::getenv("CPPMINER_LYRA_BACKEND");
-    return value ? value : "auto";
+    if (!value)
+        return Lyra2Backend::Auto;
+    Lyra2Backend parsed = Lyra2Backend::Auto;
+    if (!parseLyraBackendName(value, parsed))
+        return Lyra2Backend::Auto;
+    return parsed;
 #endif
+}
+
+void createSimdContexts(Lyra2Backend backend, const simd::CpuFeatures& feat,
+                        simd::Lyra2Sse2Context*& sse2, simd::Lyra2Avx2Context*& avx2,
+                        simd::Lyra2Avx512Context*& avx512)
+{
+    if (backend == Lyra2Backend::Scalar)
+        return;
+    if (backend == Lyra2Backend::Avx512 && feat.avx512f)
+        avx512 = simd::lyra2Avx512Create();
+    else if (backend == Lyra2Backend::Avx2 && feat.avx2)
+        avx2 = simd::lyra2Avx2Create();
+    else if (backend == Lyra2Backend::Sse2 && feat.sse2)
+        sse2 = simd::lyra2Sse2Create();
 }
 
 } // namespace
@@ -44,23 +151,9 @@ Lyra2Context::Lyra2Context()
         throw std::runtime_error("failed to allocate the Lyra2 scratch matrix (~6 MB)");
 
     const auto features = simd::cpuFeatures();
-    const char* requested = requestedLyraBackend();
-    const bool forceAvx512 = std::strcmp(requested, "avx512") == 0;
-    const bool forceAvx2 = std::strcmp(requested, "avx2") == 0;
-    const bool forceSse2 = std::strcmp(requested, "sse2") == 0;
-    const bool forceScalar = std::strcmp(requested, "scalar") == 0;
-
-    // AVX2 is the default on CPUs that expose both ISAs: Lyra2 is
-    // memory-bound and AVX-512 may lower the core frequency enough to lose.
-    if (!forceScalar && (forceAvx512 || (!forceAvx2 && !forceSse2 && features.avx512f && !features.avx2)))
-        if (features.avx512f)
-            simd512Ctx_ = simd::lyra2Avx512Create();
-    if (!forceScalar && !simd512Ctx_ && (forceAvx2 || (!forceAvx512 && !forceSse2 && features.avx2)))
-        if (features.avx2)
-            simdCtx_ = simd::lyra2Avx2Create();
-    if (!forceScalar && !simd512Ctx_ && !simdCtx_ && (forceSse2 || (!forceAvx512 && !forceAvx2 && features.sse2)))
-        if (features.sse2)
-            simdSse2Ctx_ = simd::lyra2Sse2Create();
+    const Lyra2Backend envOverride = envLyraBackendOverride();
+    const Lyra2Backend backend = envOverride != Lyra2Backend::Auto ? envOverride : effectiveLyraBackend(features);
+    createSimdContexts(backend, features, simdSse2Ctx_, simdCtx_, simd512Ctx_);
 }
 
 Lyra2Context::~Lyra2Context()
@@ -79,22 +172,44 @@ void lyra2WebHash(Lyra2Context& ctx, const uint8_t* data, size_t size, uint32_t 
 const char* lyra2WebActiveBackendName()
 {
     const auto features = simd::cpuFeatures();
-    const char* requested = requestedLyraBackend();
-    if (std::strcmp(requested, "scalar") == 0)
+    const Lyra2Backend envOverride = envLyraBackendOverride();
+    const Lyra2Backend backend = envOverride != Lyra2Backend::Auto ? envOverride : effectiveLyraBackend(features);
+    if (backend == Lyra2Backend::Scalar)
         return "scalar";
-    if (std::strcmp(requested, "sse2") == 0 && features.sse2)
+    if (backend == Lyra2Backend::Sse2 && features.sse2)
         return "SSE2 2-way";
-    if (std::strcmp(requested, "avx512") == 0 && features.avx512f)
-        return "AVX-512 8-way";
-    if (std::strcmp(requested, "avx2") == 0 && features.avx2)
+    if (backend == Lyra2Backend::Avx2 && features.avx2)
         return "AVX2 4-way";
-    if (features.avx2)
-        return "AVX2 4-way";
-    if (features.avx512f)
+    if (backend == Lyra2Backend::Avx512 && features.avx512f)
         return "AVX-512 8-way";
-    if (features.sse2)
-        return "SSE2 2-way";
     return "scalar";
+}
+
+size_t lyra2WebSimdLanes(const Lyra2Context& ctx)
+{
+    if (ctx.simd512Handle())
+        return 8;
+    if (ctx.simdHandle())
+        return 4;
+    if (ctx.simdSse2Handle())
+        return 2;
+    return 1;
+}
+
+bool lyra2WebSelectBackend(const std::string& name, std::string& error)
+{
+    Lyra2Backend parsed = Lyra2Backend::Auto;
+    if (!parseLyraBackendName(name, parsed)) {
+        error = "unknown Lyra2 backend '" + name + "' (expected auto, scalar, sse2, avx2 or avx512)";
+        return false;
+    }
+    const auto features = simd::cpuFeatures();
+    if (parsed != Lyra2Backend::Auto && !backendSupported(parsed, features)) {
+        error = std::string("Lyra2 backend '") + backendName(parsed) + "' is not available on this CPU";
+        return false;
+    }
+    selectedLyraBackend = parsed;
+    return true;
 }
 
 namespace {
@@ -251,6 +366,109 @@ bool lyra2WebSelfTest()
     }
 
     return true;
+}
+
+namespace {
+
+const uint8_t kBenchBlob[76] = {
+    0x03, 0x05, 0xA0, 0xDB, 0xD6, 0xBF, 0x05, 0xCF, 0x16, 0xE5, 0x03, 0xF3, 0xA6, 0x6F, 0x78, 0x00,
+    0x7C, 0xBF, 0x34, 0x14, 0x43, 0x32, 0xEC, 0xBF, 0xC2, 0x2E, 0xD9, 0x5C, 0x87, 0x00, 0x38, 0x3B,
+    0x30, 0x9A, 0xCE, 0x19, 0x23, 0xA0, 0x96, 0x4B, 0x00, 0x00, 0x00, 0x08, 0xBA, 0x93, 0x9A, 0x62,
+    0x72, 0x4C, 0x0D, 0x75, 0x81, 0xFC, 0xE5, 0x76, 0x1E, 0x9D, 0x8A, 0x0E, 0x6A, 0x1C, 0x3F, 0x92,
+    0x4F, 0xDD, 0x84, 0x93, 0xD1, 0x11, 0x56, 0x49, 0xC0, 0x5E, 0xB6, 0x01,
+};
+
+void pushBenchResult(std::vector<BackendBenchResult>& results, const char* name, uint64_t totalHashes, double elapsed)
+{
+    results.push_back({name, elapsed > 0.0 ? double(totalHashes) / elapsed : 0.0});
+}
+
+void benchmarkScalarLyra(std::vector<BackendBenchResult>& results, uint32_t tcost, double seconds)
+{
+    Lyra2Context ctx;
+    std::vector<uint8_t> blob(std::begin(kBenchBlob), std::end(kBenchBlob));
+    uint8_t hash[32];
+    uint64_t nonce = 0;
+    uint64_t totalHashes = 0;
+    auto t0 = std::chrono::steady_clock::now();
+    double elapsed = 0.0;
+    while (elapsed < seconds) {
+        std::memcpy(blob.data() + blob.size() - sizeof(uint64_t), &nonce, sizeof(nonce));
+        lyra2WebHash(ctx, blob.data(), blob.size(), tcost, hash);
+        ++nonce;
+        ++totalHashes;
+        elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    }
+    pushBenchResult(results, "scalar", totalHashes, elapsed);
+}
+
+} // namespace
+
+std::vector<BackendBenchResult> lyra2WebBenchmarkBackends(double secondsPerBackend, uint32_t tcost)
+{
+    std::vector<BackendBenchResult> results;
+    const auto features = simd::cpuFeatures();
+
+    benchmarkScalarLyra(results, tcost, secondsPerBackend);
+
+    if (features.sse2) {
+        simd::Lyra2Sse2Context* raw = simd::lyra2Sse2Create();
+        if (raw) {
+            uint8_t out[2][32];
+            uint64_t nonce = 0;
+            uint64_t totalHashes = 0;
+            auto t0 = std::chrono::steady_clock::now();
+            double elapsed = 0.0;
+            while (elapsed < secondsPerBackend) {
+                simd::lyra2Sse2Hash2(*raw, kBenchBlob, sizeof(kBenchBlob), nonce, tcost, out);
+                nonce += 2;
+                totalHashes += 2;
+                elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+            }
+            simd::lyra2Sse2Destroy(raw);
+            pushBenchResult(results, "SSE2 2-way", totalHashes, elapsed);
+        }
+    }
+
+    if (features.avx2) {
+        simd::Lyra2Avx2Context* raw = simd::lyra2Avx2Create();
+        if (raw) {
+            uint8_t out[4][32];
+            uint64_t nonce = 0;
+            uint64_t totalHashes = 0;
+            auto t0 = std::chrono::steady_clock::now();
+            double elapsed = 0.0;
+            while (elapsed < secondsPerBackend) {
+                simd::lyra2Avx2Hash4(*raw, kBenchBlob, sizeof(kBenchBlob), nonce, tcost, out);
+                nonce += 4;
+                totalHashes += 4;
+                elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+            }
+            simd::lyra2Avx2Destroy(raw);
+            pushBenchResult(results, "AVX2 4-way", totalHashes, elapsed);
+        }
+    }
+
+    if (features.avx512f) {
+        simd::Lyra2Avx512Context* raw = simd::lyra2Avx512Create();
+        if (raw) {
+            uint8_t out[8][32];
+            uint64_t nonce = 0;
+            uint64_t totalHashes = 0;
+            auto t0 = std::chrono::steady_clock::now();
+            double elapsed = 0.0;
+            while (elapsed < secondsPerBackend) {
+                simd::lyra2Avx512Hash8(*raw, kBenchBlob, sizeof(kBenchBlob), nonce, tcost, out);
+                nonce += 8;
+                totalHashes += 8;
+                elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+            }
+            simd::lyra2Avx512Destroy(raw);
+            pushBenchResult(results, "AVX-512 8-way", totalHashes, elapsed);
+        }
+    }
+
+    return results;
 }
 
 } // namespace cppminer::algo

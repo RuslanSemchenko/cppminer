@@ -37,9 +37,13 @@ private:
     void classicThreadLoop(int threadId);
     void webchainThreadLoop(int threadId);
     void randomXThreadLoop(int threadId);
+    void logHashrate(bool perThread) const;
+    uint64_t acceptedShares() const;
+    uint64_t rejectedShares() const;
 
     Config config_;
     std::atomic<bool> stopRequested_{false};
+    std::atomic<bool> hashrateSnapshotRequested_{false};
 
     std::vector<std::unique_ptr<std::atomic<bool>>> restartFlags_;
     std::vector<std::atomic<bool>*> restartFlagPtrs_;
