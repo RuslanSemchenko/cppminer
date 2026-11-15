@@ -16,8 +16,9 @@ bool parseTarget(const std::string& hex, std::array<uint8_t, 8>& out)
     }
     if (raw.size() == 4) {
         uint32_t compact = util::le32dec(raw.data());
-        if (compact == 0)
+        if (compact == 0) {
             return false;
+        }
         const uint64_t target = UINT64_MAX / (UINT64_C(0xffffffff) / compact);
         util::le64enc(out.data(), target);
         return target != 0;
@@ -69,8 +70,9 @@ bool parseRandomXJob(const nlohmann::json& p, RandomXWork& out, std::string& err
         return false;
     }
     work.nonceOffset = 39;
-    if (p.contains("nonce_offset") && p["nonce_offset"].is_number_unsigned())
+    if (p.contains("nonce_offset") && p["nonce_offset"].is_number_unsigned()) {
         work.nonceOffset = p["nonce_offset"].get<uint32_t>();
+    }
     if (work.nonceOffset > work.blob.size() || work.blob.size() - work.nonceOffset < 4) {
         error = "RandomX nonce offset is outside the job blob";
         return false;

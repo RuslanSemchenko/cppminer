@@ -31,7 +31,7 @@ namespace cppminer::simd {
 
 constexpr size_t scryptScratchWords(uint32_t costN, int width)
 {
-    return size_t(costN) * 32 * size_t(width);
+    return static_cast<size_t>(costN) * 32 * static_cast<size_t>(width);
 }
 
 // Scalar (1-way): B[32], V must hold scryptScratchWords(costN, 1) words.

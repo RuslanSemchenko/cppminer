@@ -50,7 +50,7 @@ void xorSalsa8(uint32_t B[16], const uint32_t Bx[16])
 void scryptRomixScalar(uint32_t B[32], uint32_t* V, uint32_t costN)
 {
     for (uint32_t i = 0; i < costN; i++) {
-        std::memcpy(V + size_t(i) * 32, B, 128);
+        std::memcpy(V + static_cast<size_t>(i) * 32, B, 128);
         xorSalsa8(B + 0, B + 16);
         xorSalsa8(B + 16, B + 0);
     }

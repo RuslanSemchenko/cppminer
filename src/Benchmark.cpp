@@ -58,11 +58,13 @@ double benchmarkMultiThreadSha256d(int threads, double seconds)
             rates[static_cast<size_t>(t)] = elapsed > 0.0 ? double(totalHashes) / elapsed : 0.0;
         });
     }
-    for (auto& w : workers)
+    for (auto& w : workers) {
         w.join();
+    }
     double total = 0.0;
-    for (double r : rates)
+    for (double r : rates) {
         total += r;
+    }
     return total;
 }
 
@@ -92,11 +94,13 @@ double benchmarkMultiThreadScrypt(int threads, uint32_t costN, double seconds)
             rates[static_cast<size_t>(t)] = elapsed > 0.0 ? double(totalHashes) / elapsed : 0.0;
         });
     }
-    for (auto& w : workers)
+    for (auto& w : workers) {
         w.join();
+    }
     double total = 0.0;
-    for (double r : rates)
+    for (double r : rates) {
         total += r;
+    }
     return total;
 }
 
@@ -140,11 +144,13 @@ double benchmarkMultiThreadRandomX(int threads, double seconds, bool fullMemory,
             rates[static_cast<size_t>(t)] = elapsed > 0.0 ? double(totalHashes) / elapsed : 0.0;
         });
     }
-    for (auto& w : workers)
+    for (auto& w : workers) {
         w.join();
+    }
     double total = 0.0;
-    for (double r : rates)
+    for (double r : rates) {
         total += r;
+    }
     return total;
 }
 
@@ -174,11 +180,13 @@ double benchmarkMultiThreadLyra2Web(int threads, uint32_t tcost, double seconds)
             rates[static_cast<size_t>(t)] = elapsed > 0.0 ? double(totalHashes) / elapsed : 0.0;
         });
     }
-    for (auto& w : workers)
+    for (auto& w : workers) {
         w.join();
+    }
     double total = 0.0;
-    for (double r : rates)
+    for (double r : rates) {
         total += r;
+    }
     return total;
 }
 

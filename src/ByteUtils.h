@@ -16,55 +16,71 @@ namespace cppminer::util {
 
 inline uint32_t swab32(uint32_t v)
 {
-    return ((v & 0x000000ffu) << 24) | ((v & 0x0000ff00u) << 8) |
-           ((v & 0x00ff0000u) >> 8)  | ((v & 0xff000000u) >> 24);
+    return ((v & 0x000000ffU) << 24u) | ((v & 0x0000ff00U) << 8u) |
+           ((v & 0x00ff0000U) >> 8u)  | ((v & 0xff000000U) >> 24u);
 }
 
 inline uint64_t swab64(uint64_t v)
 {
-    return ((v & 0x00000000000000ffULL) << 56) | ((v & 0x000000000000ff00ULL) << 40) |
-           ((v & 0x0000000000ff0000ULL) << 24) | ((v & 0x00000000ff000000ULL) << 8)  |
-           ((v & 0x000000ff00000000ULL) >> 8)  | ((v & 0x0000ff0000000000ULL) >> 24) |
-           ((v & 0x00ff000000000000ULL) >> 40) | ((v & 0xff00000000000000ULL) >> 56);
+    return ((v & 0x00000000000000ffULL) << 56ULL) | ((v & 0x000000000000ff00ULL) << 40ULL) |
+           ((v & 0x0000000000ff0000ULL) << 24ULL) | ((v & 0x00000000ff000000ULL) << 8ULL)  |
+           ((v & 0x000000ff00000000ULL) >> 8ULL)  | ((v & 0x0000ff0000000000ULL) >> 24ULL) |
+           ((v & 0x00ff000000000000ULL) >> 40ULL) | ((v & 0xff00000000000000ULL) >> 56ULL);
 }
 
 inline uint32_t be32dec(const void* pp)
 {
     const uint8_t* p = static_cast<const uint8_t*>(pp);
-    return (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) | (uint32_t(p[2]) << 8) | uint32_t(p[3]);
+    return (static_cast<uint32_t>(p[0]) << 24u)
+         | (static_cast<uint32_t>(p[1]) << 16u)
+         | (static_cast<uint32_t>(p[2]) << 8u)
+         | static_cast<uint32_t>(p[3]);
 }
 
 inline uint32_t le32dec(const void* pp)
 {
     const uint8_t* p = static_cast<const uint8_t*>(pp);
-    return uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24);
+    return static_cast<uint32_t>(p[0])
+         | (static_cast<uint32_t>(p[1]) << 8u)
+         | (static_cast<uint32_t>(p[2]) << 16u)
+         | (static_cast<uint32_t>(p[3]) << 24u);
 }
 
 inline void be32enc(void* pp, uint32_t x)
 {
     uint8_t* p = static_cast<uint8_t*>(pp);
-    p[0] = uint8_t(x >> 24); p[1] = uint8_t(x >> 16); p[2] = uint8_t(x >> 8); p[3] = uint8_t(x);
+    p[0] = static_cast<uint8_t>(x >> 24u);
+    p[1] = static_cast<uint8_t>(x >> 16u);
+    p[2] = static_cast<uint8_t>(x >> 8u);
+    p[3] = static_cast<uint8_t>(x);
 }
 
 inline void le32enc(void* pp, uint32_t x)
 {
     uint8_t* p = static_cast<uint8_t*>(pp);
-    p[0] = uint8_t(x); p[1] = uint8_t(x >> 8); p[2] = uint8_t(x >> 16); p[3] = uint8_t(x >> 24);
+    p[0] = static_cast<uint8_t>(x);
+    p[1] = static_cast<uint8_t>(x >> 8u);
+    p[2] = static_cast<uint8_t>(x >> 16u);
+    p[3] = static_cast<uint8_t>(x >> 24u);
 }
 
 inline uint64_t le64dec(const void* pp)
 {
     const uint8_t* p = static_cast<const uint8_t*>(pp);
     uint64_t v = 0;
-    for (int i = 7; i >= 0; --i)
-        v = (v << 8) | p[i];
+    for (int i = 7; i >= 0; --i) {
+        v = (v << 8u) | p[static_cast<size_t>(i)];
+    }
     return v;
 }
 
 inline void le64enc(void* pp, uint64_t x)
 {
     uint8_t* p = static_cast<uint8_t*>(pp);
-    for (int i = 0; i < 8; ++i) { p[i] = uint8_t(x); x >>= 8; }
+    for (int i = 0; i < 8; ++i) {
+        p[static_cast<size_t>(i)] = static_cast<uint8_t>(x);
+        x >>= 8u;
+    }
 }
 
 // hex helpers -----------------------------------------------------------
@@ -85,7 +101,7 @@ std::vector<uint8_t> hexToBytes(const std::string& hex);
 // original cpuminer stores them: target[0] is the least significant 32-bit
 // limb, target[7] the most significant one.
 
-void diffToTarget(uint32_t target[8], double diff);
-bool fullTest(const uint32_t hash[8], const uint32_t target[8]);
+void diffToTarget(uint32_t* target, double diff);
+bool fullTest(const uint32_t* hash, const uint32_t* target);
 
 } // namespace cppminer::util

@@ -23,10 +23,10 @@ option(CPPMINER_BUILD_FUZZING "Build libFuzzer targets" OFF)
 
 if(CPPMINER_REQUIRE_CLANG)
     if(NOT CMAKE_C_COMPILER_ID STREQUAL "Clang" OR NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        message(FATAL_ERROR "cppminer requires Clang C and C++ compilers; configure with clang-22/clang++-22")
+        message(FATAL_ERROR "cppminer requires Clang C and C++ compilers; configure with clang-23/clang++-23")
     endif()
-    if(CMAKE_C_COMPILER_VERSION VERSION_LESS 22 OR CMAKE_CXX_COMPILER_VERSION VERSION_LESS 22)
-        message(FATAL_ERROR "cppminer requires Clang 22 or newer (found C=${CMAKE_C_COMPILER_VERSION}, CXX=${CMAKE_CXX_COMPILER_VERSION})")
+    if(CMAKE_C_COMPILER_VERSION VERSION_LESS 23 OR CMAKE_CXX_COMPILER_VERSION VERSION_LESS 23)
+        message(FATAL_ERROR "cppminer requires Clang 23 or newer (found C=${CMAKE_C_COMPILER_VERSION}, CXX=${CMAKE_CXX_COMPILER_VERSION})")
     endif()
 endif()
 

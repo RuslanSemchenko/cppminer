@@ -66,7 +66,7 @@ void scryptRomix8way(uint32_t B[32 * W8], uint32_t* V_, uint32_t costN)
         x[i] = load(B + i * W8);
 
     for (uint32_t row = 0; row < costN; row++) {
-        uint32_t* dst = V_ + size_t(row) * 32 * W8;
+        uint32_t* dst = V_ + static_cast<size_t>(row) * 32 * W8;
         for (int i = 0; i < 32; i++)
             store(dst + i * W8, x[i]);
         xorSalsa8(x + 0, x + 16);
@@ -80,7 +80,7 @@ void scryptRomix8way(uint32_t B[32 * W8], uint32_t* V_, uint32_t costN)
         for (int i = 0; i < 32; i++) {
             uint32_t gathered[W8];
             for (int lane = 0; lane < W8; lane++)
-                gathered[lane] = V_[size_t(j[lane]) * 32 * W8 + size_t(i) * W8 + lane];
+                gathered[lane] = V_[static_cast<size_t>(j[lane]) * 32 * W8 + static_cast<size_t>(i) * W8 + lane];
             x[i] = xorv(x[i], load(gathered));
         }
         xorSalsa8(x + 0, x + 16);

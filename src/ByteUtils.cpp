@@ -48,24 +48,24 @@ std::vector<uint8_t> hexToBytes(const std::string& hex)
     return out;
 }
 
-void diffToTarget(uint32_t target[8], double diff)
+void diffToTarget(uint32_t* target, double diff)
 {
     int k = 6;
     for (; k > 0 && diff > 1.0; k--)
         diff /= 4294967296.0;
-    uint64_t m = (uint64_t)(4294901760.0 / diff);
+    uint64_t m = static_cast<uint64_t>(4294901760.0 / diff);
     if (m == 0 && k == 6) {
         for (int i = 0; i < 8; i++)
-            target[i] = 0xffffffffu;
+            target[i] = 0xffffffffU;
     } else {
         for (int i = 0; i < 8; i++)
             target[i] = 0;
-        target[k] = (uint32_t)m;
-        target[k + 1] = (uint32_t)(m >> 32);
+        target[k] = static_cast<uint32_t>(m);
+        target[k + 1] = static_cast<uint32_t>(m >> 32u);
     }
 }
 
-bool fullTest(const uint32_t hash[8], const uint32_t target[8])
+bool fullTest(const uint32_t* hash, const uint32_t* target)
 {
     bool rc = true;
     for (int i = 7; i >= 0; i--) {

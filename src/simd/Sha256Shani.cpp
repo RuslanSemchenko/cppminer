@@ -98,8 +98,9 @@ void sha256TransformShani(uint32_t state[8], const uint8_t block[64])
         }
         msg = _mm_shuffle_epi32(msg, 0x0E);
         state0 = _mm_sha256rnds2_epu32(state0, state1, msg);
-        if (groups[gi].prepNext)
+        if (groups[gi].prepNext) {
             cPrev = _mm_sha256msg1_epu32(cPrev, c0);
+        }
     }
 
     state0 = _mm_add_epi32(state0, abefSave);

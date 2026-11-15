@@ -1,0 +1,24 @@
+---
+Checks: >
+  -*,
+  bugprone-*,
+  clang-analyzer-*,
+  cppcoreguidelines-init-variables,
+  misc-include-cleaner,
+  misc-use-internal-linkage,
+  modernize-avoid-c-style-cast,
+  readability-braces-around-statements,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-macro-parentheses,
+  -bugprone-narrowing-conversions,
+  -bugprone-reserved-identifier,
+  -bugprone-signed-bitwise,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -clang-analyzer-security.MmapWriteExec,
+  -cppcoreguidelines-pro-type-member-init,
+  -misc-include-cleaner,
+WarningsAsErrors: '-*'
+HeaderFilterRegex: '.*'
+FormatStyle: file
+User: ruslan

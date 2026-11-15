@@ -48,7 +48,7 @@ void cpuidRaw(uint32_t leaf, uint32_t subleaf, uint32_t out[4])
 
 uint64_t xgetbv(uint32_t index)
 {
-    uint32_t eax, edx;
+    uint32_t eax = 0, edx = 0;
     __asm__ __volatile__("xgetbv" : "=a"(eax), "=d"(edx) : "c"(index));
     return (static_cast<uint64_t>(edx) << 32) | eax;
 }
@@ -78,8 +78,9 @@ CpuFeatures detect()
             // capable CPU running under an OS/hypervisor that never called
             // XSETBV for YMM would fault on the first AVX instruction.
             uint64_t xcr0 = xgetbv(0);
-            if ((xcr0 & 0x6ull) == 0x6ull)
+            if ((xcr0 & 0x6ull) == 0x6ull) {
                 f.avx = true;
+            }
         }
     }
 
@@ -95,15 +96,17 @@ CpuFeatures detect()
         f.sha = shaBit;
         // AVX2 (256-bit YMM), on the other hand, needs the same OS support
         // as AVX.
-        if (avx2Bit && f.avx)
+        if (avx2Bit && f.avx) {
             f.avx2 = true;
+        }
         // AVX-512F (512-bit ZMM) additionally needs the OS to save/restore
         // the opmask (bit 5), ZMM_Hi256 (bit 6) and Hi16_ZMM (bit 7) state,
         // on top of the SSE/AVX bits already required above.
         if (avx512fBit && f.avx) {
             uint64_t xcr0 = xgetbv(0);
-            if ((xcr0 & 0xe6ull) == 0xe6ull)
+            if ((xcr0 & 0xe6ull) == 0xe6ull) {
                 f.avx512f = true;
+            }
         }
     }
 #endif
@@ -133,10 +136,12 @@ std::string buildFeaturesString(const CpuFeatures& f)
 {
     std::string s;
     auto add = [&](bool present, const char* name) {
-        if (!present)
+        if (!present) {
             return;
-        if (!s.empty())
+        }
+        if (!s.empty()) {
             s += ' ';
+        }
         s += name;
     };
     add(f.sse2, "SSE2");
@@ -148,8 +153,9 @@ std::string buildFeaturesString(const CpuFeatures& f)
     add(f.sha, "SHA");
     add(f.neon, "NEON");
     add(f.armSha2, "ARMv8-SHA2");
-    if (s.empty())
+    if (s.empty()) {
         s = "(none - portable scalar fallback only)";
+    }
     return s;
 }
 
