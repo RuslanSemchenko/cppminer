@@ -100,35 +100,65 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $llvmBin = $null
+          $dest = 'C:\LLVM'
 
-          # Find the newest stable LLVM 23.x release instead of hard-coding a
-          # patch version that may not exist.
+          # Newest stable LLVM 23.x release tag.
           $tag = gh api --paginate "repos/llvm/llvm-project/releases" `
             --jq '.[] | select(.prerelease == false and (.tag_name | startswith("llvmorg-23."))) | .tag_name' |
             Select-Object -First 1
+          if (-not $tag) { throw 'No stable llvmorg-23.* release found on GitHub' }
+          Write-Host "Using LLVM release $tag"
+          Write-Host 'Windows assets in this release:'
+          gh release view $tag --repo llvm/llvm-project --json assets --jq '.assets[].name' |
+            Where-Object { $_ -match 'win' } | ForEach-Object { Write-Host "  $_" }
 
-          if ($tag) {
-            Write-Host "Using LLVM release $tag"
+          function Test-Llvm {
+            if (-not (Test-Path "$dest\bin\clang-cl.exe")) { return $false }
+            $v = (& "$dest\bin\clang-cl.exe" --version | Select-Object -First 1)
+            Write-Host "Installed: $v"
+            return ($v -match 'version 23\.')
+          }
+
+          $ok = $false
+
+          # 1) Prebuilt archive: extraction is synchronous, so there is no
+          #    "installer returned early" race.
+          Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue
+          gh release download $tag --repo llvm/llvm-project `
+            --pattern 'clang+llvm-*-x86_64-pc-windows-msvc.tar.xz' --dir $env:RUNNER_TEMP --clobber
+          if ($LASTEXITCODE -eq 0) {
+            $archive = Get-ChildItem $env:RUNNER_TEMP -Filter 'clang+llvm-*-x86_64-pc-windows-msvc.tar.xz' | Select-Object -First 1
+            if ($archive) {
+              New-Item -ItemType Directory -Force -Path $dest | Out-Null
+              & "$env:SystemRoot\System32\tar.exe" -xf $archive.FullName -C $dest --strip-components=1
+              if ($LASTEXITCODE -eq 0) { $ok = Test-Llvm }
+            }
+          }
+
+          # 2) NSIS installer, waiting until the files really appear.
+          if (-not $ok) {
+            Write-Host 'Archive method failed, trying the installer'
+            Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue
             gh release download $tag --repo llvm/llvm-project `
               --pattern 'LLVM-*-win64.exe' --dir $env:RUNNER_TEMP --clobber
             if ($LASTEXITCODE -eq 0) {
               $exe = Get-ChildItem $env:RUNNER_TEMP -Filter 'LLVM-*-win64.exe' | Select-Object -First 1
-              $proc = Start-Process -FilePath $exe.FullName -ArgumentList '/S', '/D=C:\LLVM' -Wait -PassThru
-              if ($proc.ExitCode -eq 0 -and (Test-Path 'C:\LLVM\bin\clang-cl.exe')) {
-                $llvmBin = 'C:\LLVM\bin'
+              Start-Process -FilePath $exe.FullName -ArgumentList '/S', "/D=$dest" | Out-Null
+              $deadline = (Get-Date).AddMinutes(10)
+              while ((Get-Date) -lt $deadline) {
+                Start-Sleep -Seconds 5
+                $running = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'LLVM-*' }
+                if (-not $running -and (Test-Path "$dest\bin\clang-cl.exe")) { break }
               }
+              $ok = Test-Llvm
             }
           }
 
-          if (-not $llvmBin) {
-            Write-Host 'Direct installer failed, falling back to Chocolatey'
-            choco install llvm -y --no-progress --force
-            if ($LASTEXITCODE -ne 0) { throw 'Chocolatey LLVM install failed' }
-            $llvmBin = 'C:\Program Files\LLVM\bin'
-          }
+          if (-not $ok) { throw "Could not install LLVM 23 ($tag) into $dest" }
 
-          Add-Content -Path $env:GITHUB_PATH -Value $llvmBin
+          # Our LLVM must win over the preinstalled C:\Program Files\LLVM (20.x).
+          Add-Content -Path $env:GITHUB_PATH -Value "$dest\bin"
+          Add-Content -Path $env:GITHUB_ENV -Value "LLVM_ROOT=$dest"
 
       - name: Verify Clang version on Unix
         if: runner.os != 'Windows'
@@ -146,7 +176,7 @@ jobs:
         shell: pwsh
         run: |
           Set-StrictMode -Version Latest
-          $clangCl = (Get-Command clang-cl -CommandType Application -ErrorAction Stop | Select-Object -First 1 -ExpandProperty Source)
+          $clangCl = Join-Path $env:LLVM_ROOT 'bin\clang-cl.exe'
           Write-Host "clang-cl: $clangCl"
           & $clangCl --version
           $line = (& $clangCl --version | Select-Object -First 1)
@@ -221,7 +251,7 @@ jobs:
           # Use Clang's MSVC-compatible driver explicitly.  This keeps C, C++,
           # and ASM compilation on LLVM while remaining ABI-compatible with
           # the x64-windows libraries supplied by vcpkg.
-          $clangCl = (Get-Command clang-cl -CommandType Application -ErrorAction Stop | Select-Object -First 1 -ExpandProperty Source)
+          $clangCl = (Join-Path $env:LLVM_ROOT 'bin\clang-cl.exe') -replace '\\', '/'
           $toolchain = Join-Path $env:VCPKG_INSTALLATION_ROOT 'scripts/buildsystems/vcpkg.cmake'
           cmake -S . -B build -G Ninja `
             "-DCMAKE_C_COMPILER=$clangCl" `
