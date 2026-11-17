@@ -35,12 +35,18 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh ${{ env.LLVM_VERSION }}
-          # llvm.sh installs clang-23 but does not create unversioned alternatives.
-          # Install the meta-package so that `clang` / `clang++` point to clang-23.
-          sudo apt-get install -y clang clang++
+          # Add the official LLVM apt repository and install clang-23.
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          sudo add-apt-repository "deb https://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-${{ env.LLVM_VERSION }} main"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang-${{ env.LLVM_VERSION }} \
+            clang++-${{ env.LLVM_VERSION }} \
+            lld-${{ env.LLVM_VERSION }} \
+            llvm-${{ env.LLVM_VERSION }}
+          # Create unversioned alternatives so `clang` / `clang++` resolve to clang-23.
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-${{ env.LLVM_VERSION }} 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-${{ env.LLVM_VERSION }} 100
 
       - name: Install LLVM 23 on macOS
         if: runner.os == 'macOS'
@@ -52,7 +58,17 @@ jobs:
       - name: Install LLVM 23 on Windows
         if: runner.os == 'Windows'
         shell: pwsh
-        run: choco install llvm
+        run: |
+          # Download the official LLVM installer from llvm.org releases.
+          $version = '23.1.5'
+          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$version/LLVM-$version-win64.exe"
+          Invoke-WebRequest -Uri $url -OutFile "LLVM-$version-win64.exe"
+          # Silent install to C:\LLVM
+          Start-Process -FilePath "LLVM-$version-win64.exe" -ArgumentList "/S /D=C:\LLVM" -Wait -NoNewWindow
+          Remove-Item "LLVM-$version-win64.exe" -Force
+          # Add to PATH and persist for subsequent steps.
+          $env:PATH = "C:\LLVM\bin;$env:PATH"
+          Add-Content -Path $env:GITHUB_PATH -Value "C:\LLVM\bin"
 
       - name: Verify Clang version on Unix
         if: runner.os != 'Windows'
@@ -244,11 +260,18 @@ jobs:
       - name: Install LLVM 23
         shell: bash
         run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh ${{ env.LLVM_VERSION }}
-          # llvm.sh installs clang-23 but does not create unversioned alternatives.
-          sudo apt-get install -y clang clang++
+          # Add the official LLVM apt repository and install clang-23.
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          sudo add-apt-repository "deb https://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-${{ env.LLVM_VERSION }} main"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang-${{ env.LLVM_VERSION }} \
+            clang++-${{ env.LLVM_VERSION }} \
+            lld-${{ env.LLVM_VERSION }} \
+            llvm-${{ env.LLVM_VERSION }}
+          # Create unversioned alternatives so `clang` / `clang++` resolve to clang-23.
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-${{ env.LLVM_VERSION }} 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-${{ env.LLVM_VERSION }} 100
 
       - name: Install dependencies
         shell: bash
