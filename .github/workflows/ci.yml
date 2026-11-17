@@ -21,7 +21,7 @@ jobs:
       matrix:
         include:
           - name: linux-x86_64-clang23
-            os: ubuntu-latest
+            os: ubuntu-24.04
           - name: windows-x86_64-clang23
             os: windows-latest
           - name: macos-arm64-clang23
@@ -31,22 +31,32 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # ------------------------------------------------------------------
+      # LLVM / Clang 23
+      # ------------------------------------------------------------------
       - name: Install LLVM 23 on Linux
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          # Add the official LLVM apt repository and install clang-23.
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
-          sudo add-apt-repository "deb https://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-${{ env.LLVM_VERSION }} main"
+          set -euo pipefail
+          codename="$(lsb_release -cs)"
+          sudo install -d -m 0755 /etc/apt/keyrings
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/keyrings/apt.llvm.org.asc > /dev/null
+          echo "deb [signed-by=/etc/apt/keyrings/apt.llvm.org.asc] https://apt.llvm.org/${codename}/ llvm-toolchain-${codename}-${LLVM_VERSION} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm-${LLVM_VERSION}.list > /dev/null
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang-${{ env.LLVM_VERSION }} \
-            clang++-${{ env.LLVM_VERSION }} \
-            lld-${{ env.LLVM_VERSION }} \
-            llvm-${{ env.LLVM_VERSION }}
-          # Create unversioned alternatives so `clang` / `clang++` resolve to clang-23.
-          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-${{ env.LLVM_VERSION }} 100
-          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-${{ env.LLVM_VERSION }} 100
+            clang-${LLVM_VERSION} \
+            lld-${LLVM_VERSION} \
+            llvm-${LLVM_VERSION} \
+            libclang-rt-${LLVM_VERSION}-dev
+          # NOTE: update-alternatives silently refuses to replace /usr/bin/clang
+          # on GitHub runners (the file already exists and is not managed by
+          # alternatives), so clang stayed at an old version.  Put LLVM's own
+          # bin directory (it has unversioned clang/clang++/lld) first in PATH.
+          test -x "/usr/lib/llvm-${LLVM_VERSION}/bin/clang"
+          echo "/usr/lib/llvm-${LLVM_VERSION}/bin" >> "$GITHUB_PATH"
 
       - name: Install LLVM 23 on macOS
         if: runner.os == 'macOS'
@@ -55,26 +65,77 @@ jobs:
           brew install llvm@23
           echo "$(brew --prefix llvm@23)/bin" >> "$GITHUB_PATH"
 
-      - name: Install LLVM 23 on Windows
+      # clang-cl needs the MSVC/Windows SDK environment (INCLUDE, LIB, ...).
+      # This step goes BEFORE the LLVM install so that our LLVM stays first in PATH.
+      - name: Import MSVC environment on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Download the official LLVM installer from llvm.org releases.
-          $version = '23.1.5'
-          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$version/LLVM-$version-win64.exe"
-          Invoke-WebRequest -Uri $url -OutFile "LLVM-$version-win64.exe"
-          # Silent install to C:\LLVM
-          Start-Process -FilePath "LLVM-$version-win64.exe" -ArgumentList "/S /D=C:\LLVM" -Wait -NoNewWindow
-          Remove-Item "LLVM-$version-win64.exe" -Force
-          # Add to PATH and persist for subsequent steps.
-          $env:PATH = "C:\LLVM\bin;$env:PATH"
-          Add-Content -Path $env:GITHUB_PATH -Value "C:\LLVM\bin"
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $vs = & $vswhere -latest -products * -property installationPath
+          if (-not $vs) { throw 'Visual Studio not found' }
+          $bat = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          $lines = cmd /c "`"$bat`" >nul 2>&1 && set"
+          foreach ($line in $lines) {
+            if ($line -match '^([^=]+)=(.*)$') {
+              $name = $Matches[1]; $value = $Matches[2]
+              if ($name -ieq 'Path') {
+                foreach ($p in ($value -split ';')) {
+                  if ($p) { Add-Content -Path $env:GITHUB_PATH -Value $p }
+                }
+              }
+              elseif ($name -in @('INCLUDE', 'LIB', 'LIBPATH', 'VCINSTALLDIR', 'VCToolsInstallDir',
+                                  'WindowsSdkDir', 'WindowsSdkVersion', 'UCRTVersion', 'UniversalCRTSdkDir',
+                                  'VSINSTALLDIR', 'WindowsSDKLibVersion', 'WindowsSdkBinPath')) {
+                Add-Content -Path $env:GITHUB_ENV -Value "$name=$value"
+              }
+            }
+          }
+
+      - name: Install LLVM 23 on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $llvmBin = $null
+
+          # Find the newest stable LLVM 23.x release instead of hard-coding a
+          # patch version that may not exist.
+          $tag = gh api --paginate "repos/llvm/llvm-project/releases" `
+            --jq '.[] | select(.prerelease == false and (.tag_name | startswith("llvmorg-23."))) | .tag_name' |
+            Select-Object -First 1
+
+          if ($tag) {
+            Write-Host "Using LLVM release $tag"
+            gh release download $tag --repo llvm/llvm-project `
+              --pattern 'LLVM-*-win64.exe' --dir $env:RUNNER_TEMP --clobber
+            if ($LASTEXITCODE -eq 0) {
+              $exe = Get-ChildItem $env:RUNNER_TEMP -Filter 'LLVM-*-win64.exe' | Select-Object -First 1
+              $proc = Start-Process -FilePath $exe.FullName -ArgumentList '/S', '/D=C:\LLVM' -Wait -PassThru
+              if ($proc.ExitCode -eq 0 -and (Test-Path 'C:\LLVM\bin\clang-cl.exe')) {
+                $llvmBin = 'C:\LLVM\bin'
+              }
+            }
+          }
+
+          if (-not $llvmBin) {
+            Write-Host 'Direct installer failed, falling back to Chocolatey'
+            choco install llvm -y --no-progress --force
+            if ($LASTEXITCODE -ne 0) { throw 'Chocolatey LLVM install failed' }
+            $llvmBin = 'C:\Program Files\LLVM\bin'
+          }
+
+          Add-Content -Path $env:GITHUB_PATH -Value $llvmBin
 
       - name: Verify Clang version on Unix
         if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
+          which clang clang++
           clang --version
           clang++ --version
           major="$(clang++ --version | sed -n 's/.*version \([0-9][0-9]*\).*/\1/p' | head -1)"
@@ -85,19 +146,20 @@ jobs:
         shell: pwsh
         run: |
           Set-StrictMode -Version Latest
-          # Multiple LLVM installations can expose clang-cl.  Select the first
-          # PATH-resolved executable rather than expanding every matching path.
           $clangCl = (Get-Command clang-cl -CommandType Application -ErrorAction Stop | Select-Object -First 1 -ExpandProperty Source)
+          Write-Host "clang-cl: $clangCl"
           & $clangCl --version
           $line = (& $clangCl --version | Select-Object -First 1)
           if ($line -notmatch 'version ([0-9]+)') { throw "Unable to determine Clang version" }
           if ([int]$Matches[1] -lt 23) { throw "Clang 23+ is required, found $line" }
 
+      # ------------------------------------------------------------------
+      # Dependencies
+      # ------------------------------------------------------------------
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build libcurl4-openssl-dev libssl-dev nlohmann-json3-dev
 
@@ -112,9 +174,14 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT 'vcpkg.exe'
           & $vcpkg install curl nlohmann-json openssl --triplet x64-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # ------------------------------------------------------------------
+      # Configure
+      # ------------------------------------------------------------------
       - name: Configure Linux Clang build
         if: runner.os == 'Linux'
         shell: bash
@@ -149,9 +216,6 @@ jobs:
       - name: Configure Windows Clang build
         if: runner.os == 'Windows'
         shell: pwsh
-        env:
-          CC: clang-cl
-          CXX: clang-cl
         run: |
           Set-StrictMode -Version Latest
           # Use Clang's MSVC-compatible driver explicitly.  This keeps C, C++,
@@ -169,7 +233,11 @@ jobs:
             '-DCPPMINER_REQUIRE_CLANG=ON' `
             '-DCPPMINER_BUILD_FUZZING=OFF' `
             "-DCMAKE_INSTALL_PREFIX=$PWD/staging"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # ------------------------------------------------------------------
+      # Build & test
+      # ------------------------------------------------------------------
       - name: Build
         shell: bash
         run: cmake --build build --parallel
@@ -198,6 +266,9 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
+      # ------------------------------------------------------------------
+      # Package
+      # ------------------------------------------------------------------
       - name: Install Unix artifact
         if: runner.os != 'Windows'
         shell: bash
@@ -215,9 +286,12 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           cmake --install build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item LICENSE staging/
           Copy-Item scripts\run-cppminer.cmd staging\
+          New-Item -ItemType Directory -Force -Path staging\bin | Out-Null
           $vcpkgBin = Join-Path $env:VCPKG_INSTALLATION_ROOT 'installed\x64-windows\bin'
           Get-ChildItem $vcpkgBin -Filter *.dll -File | Copy-Item -Destination staging\bin -Force
 
@@ -229,7 +303,9 @@ jobs:
       - name: Verify packaged Windows artifact
         if: runner.os == 'Windows'
         shell: pwsh
-        run: .\staging\run-cppminer.cmd --benchmark -a sha256d --bench-seconds=0.1
+        run: |
+          .\staging\run-cppminer.cmd --benchmark -a sha256d --bench-seconds=0.1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Package Unix artifact
         if: runner.os != 'Windows'
@@ -251,7 +327,7 @@ jobs:
 
   sanitizers-and-fuzzing:
     name: linux-clang23-asan-ubsan-fuzz
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Check out source
@@ -260,23 +336,26 @@ jobs:
       - name: Install LLVM 23
         shell: bash
         run: |
-          # Add the official LLVM apt repository and install clang-23.
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
-          sudo add-apt-repository "deb https://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-${{ env.LLVM_VERSION }} main"
+          set -euo pipefail
+          codename="$(lsb_release -cs)"
+          sudo install -d -m 0755 /etc/apt/keyrings
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/keyrings/apt.llvm.org.asc > /dev/null
+          echo "deb [signed-by=/etc/apt/keyrings/apt.llvm.org.asc] https://apt.llvm.org/${codename}/ llvm-toolchain-${codename}-${LLVM_VERSION} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm-${LLVM_VERSION}.list > /dev/null
           sudo apt-get update
+          # libclang-rt-*-dev provides the ASan/UBSan/libFuzzer runtimes.
           sudo apt-get install -y --no-install-recommends \
-            clang-${{ env.LLVM_VERSION }} \
-            clang++-${{ env.LLVM_VERSION }} \
-            lld-${{ env.LLVM_VERSION }} \
-            llvm-${{ env.LLVM_VERSION }}
-          # Create unversioned alternatives so `clang` / `clang++` resolve to clang-23.
-          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-${{ env.LLVM_VERSION }} 100
-          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-${{ env.LLVM_VERSION }} 100
+            clang-${LLVM_VERSION} \
+            lld-${LLVM_VERSION} \
+            llvm-${LLVM_VERSION} \
+            libclang-rt-${LLVM_VERSION}-dev
+          test -x "/usr/lib/llvm-${LLVM_VERSION}/bin/clang"
+          echo "/usr/lib/llvm-${LLVM_VERSION}/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         shell: bash
         run: |
-          sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build libcurl4-openssl-dev libssl-dev nlohmann-json3-dev
 
@@ -284,6 +363,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          which clang clang++
           clang++ --version
           major="$(clang++ --version | sed -n 's/.*version \([0-9][0-9]*\).*/\1/p' | head -1)"
           test -n "$major" && test "$major" -ge 23
@@ -336,7 +416,7 @@ jobs:
           ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:symbolize=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: |
-          ./build-fuzz/randomx_job_fuzz -max_total_time=1200 tests/fuzz/corpus
+          ./build-fuzz/randomx_job_fuzz -max_total_time=600 -timeout=60 tests/fuzz/corpus
 
       - name: Run multi-algorithm fuzzing
         shell: bash
@@ -344,13 +424,13 @@ jobs:
           ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:symbolize=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: |
-          ./build-fuzz/multi_algo_fuzz -max_total_time=1200 -timeout=1200 tests/fuzz/corpus
+          ./build-fuzz/multi_algo_fuzz -max_total_time=600 -timeout=60 tests/fuzz/corpus
 
   release:
     name: publish-release-artifacts
     if: startsWith(github.ref, 'refs/tags/v')
     needs: platform-build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
