@@ -127,21 +127,28 @@ bool loadConfigFile(const std::string& path, Config& cfg, std::string& error)
         return false;
     }
     for (auto it = j.begin(); it != j.end(); ++it) {
-        if (!it.key().empty() && it.key()[0] == '_')
+        if (!it.key().empty() && it.key()[0] == '_') {
             continue; // "_comment"-style keys, same convention as example-cfg.json
+        }
         std::string value;
-        if (it->is_string())
+        if (it->is_string()) {
             value = it->get<std::string>();
-        else if (it->is_boolean())
+        }
+        else if (it->is_boolean()) {
             value = it->get<bool>() ? "true" : "false";
-        else if (it->is_number_integer())
+        }
+        else if (it->is_number_integer()) {
             value = std::to_string(it->get<long long>());
-        else if (it->is_number_float())
+        }
+        else if (it->is_number_float()) {
             value = std::to_string(it->get<double>());
-        else
+        }
+        else {
             continue;
-        if (!applyOption(cfg, it.key(), value, error))
+        }
+        if (!applyOption(cfg, it.key(), value, error)) {
             return false;
+        }
     }
     return true;
 }
@@ -190,7 +197,9 @@ bool Config::parse(int argc, char** argv, Config& out, int& exitCode)
             return false;
         }
         if (arg == "-c" || arg == "--config") { i++; continue; } // handled in pass 1
-        if (arg.rfind("--config=", 0) == 0) continue;
+        if (arg.rfind("--config=", 0) == 0) {
+            continue;
+        }
 
         if (arg == "-q" || arg == "--quiet") { out.quiet = true; continue; }
         if (arg == "-P" || arg == "--protocol-dump") { out.protocolDump = true; continue; }
@@ -203,14 +212,30 @@ bool Config::parse(int argc, char** argv, Config& out, int& exitCode)
 
         std::string name, value;
         bool needsValue = true;
-        if (arg == "-o" || arg == "--url") name = "url";
-        else if (arg == "-u" || arg == "--user") name = "user";
-        else if (arg == "-p" || arg == "--pass") name = "pass";
-        else if (arg == "-O" || arg == "--userpass") name = "userpass";
-        else if (arg == "-a" || arg == "--algo") name = "algo";
-        else if (arg == "-t" || arg == "--threads") name = "threads";
-        else if (arg == "-r" || arg == "--retries") name = "retries";
-        else if (arg == "-R" || arg == "--retry-pause") name = "retry-pause";
+        if (arg == "-o" || arg == "--url") {
+            name = "url";
+        }
+        else if (arg == "-u" || arg == "--user") {
+            name = "user";
+        }
+        else if (arg == "-p" || arg == "--pass") {
+            name = "pass";
+        }
+        else if (arg == "-O" || arg == "--userpass") {
+            name = "userpass";
+        }
+        else if (arg == "-a" || arg == "--algo") {
+            name = "algo";
+        }
+        else if (arg == "-t" || arg == "--threads") {
+            name = "threads";
+        }
+        else if (arg == "-r" || arg == "--retries") {
+            name = "retries";
+        }
+        else if (arg == "-R" || arg == "--retry-pause") {
+            name = "retry-pause";
+        }
         else if (arg.rfind("--", 0) == 0 && arg.find('=') != std::string::npos) {
             auto eq = arg.find('=');
             name = arg.substr(2, eq - 2);

@@ -28,8 +28,9 @@ bool parseLyraBackendName(const std::string& name, Lyra2Backend& out)
 {
     std::string lower;
     lower.reserve(name.size());
-    for (char c : name)
+    for (char c : name) {
         lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    }
     if (lower == "auto") {
         out = Lyra2Backend::Auto;
         return true;
@@ -88,16 +89,20 @@ bool backendSupported(Lyra2Backend backend, const simd::CpuFeatures& feat)
 
 Lyra2Backend effectiveLyraBackend(const simd::CpuFeatures& feat)
 {
-    if (selectedLyraBackend != Lyra2Backend::Auto)
+    if (selectedLyraBackend != Lyra2Backend::Auto) {
         return selectedLyraBackend;
+    }
     // AVX2 is the default on CPUs that expose both ISAs: Lyra2 is
     // memory-bound and AVX-512 may lower the core frequency enough to lose.
-    if (feat.avx2)
+    if (feat.avx2) {
         return Lyra2Backend::Avx2;
-    if (feat.avx512f)
+    }
+    if (feat.avx512f) {
         return Lyra2Backend::Avx512;
-    if (feat.sse2)
+    }
+    if (feat.sse2) {
         return Lyra2Backend::Sse2;
+    }
     return Lyra2Backend::Scalar;
 }
 
@@ -108,21 +113,26 @@ Lyra2Backend envLyraBackendOverride()
     size_t length = 0;
     const bool hasValue = _dupenv_s(&value, &length, "CPPMINER_LYRA_BACKEND") == 0 && value != nullptr;
     const std::string stored = hasValue ? value : "";
-    if (value)
+    if (value) {
         free(value);
-    if (stored.empty())
+    }
+    if (stored.empty()) {
         return Lyra2Backend::Auto;
+    }
     Lyra2Backend parsed = Lyra2Backend::Auto;
-    if (!parseLyraBackendName(stored, parsed))
+    if (!parseLyraBackendName(stored, parsed)) {
         return Lyra2Backend::Auto;
+    }
     return parsed;
 #else
     const char* value = std::getenv("CPPMINER_LYRA_BACKEND");
-    if (!value)
+    if (!value) {
         return Lyra2Backend::Auto;
+    }
     Lyra2Backend parsed = Lyra2Backend::Auto;
-    if (!parseLyraBackendName(value, parsed))
+    if (!parseLyraBackendName(value, parsed)) {
         return Lyra2Backend::Auto;
+    }
     return parsed;
 #endif
 }
@@ -131,14 +141,18 @@ void createSimdContexts(Lyra2Backend backend, const simd::CpuFeatures& feat,
                         simd::Lyra2Sse2Context*& sse2, simd::Lyra2Avx2Context*& avx2,
                         simd::Lyra2Avx512Context*& avx512)
 {
-    if (backend == Lyra2Backend::Scalar)
+    if (backend == Lyra2Backend::Scalar) {
         return;
-    if (backend == Lyra2Backend::Avx512 && feat.avx512f)
+    }
+    if (backend == Lyra2Backend::Avx512 && feat.avx512f) {
         avx512 = simd::lyra2Avx512Create();
-    else if (backend == Lyra2Backend::Avx2 && feat.avx2)
+    }
+    else if (backend == Lyra2Backend::Avx2 && feat.avx2) {
         avx2 = simd::lyra2Avx2Create();
-    else if (backend == Lyra2Backend::Sse2 && feat.sse2)
+    }
+    else if (backend == Lyra2Backend::Sse2 && feat.sse2) {
         sse2 = simd::lyra2Sse2Create();
+    }
 }
 
 } // namespace
@@ -147,8 +161,9 @@ Lyra2Context::Lyra2Context()
     : ctx_(nullptr), simdSse2Ctx_(nullptr), simdCtx_(nullptr), simd512Ctx_(nullptr)
 {
     ctx_ = LYRA2_create();
-    if (!ctx_)
+    if (!ctx_) {
         throw std::runtime_error("failed to allocate the Lyra2 scratch matrix (~6 MB)");
+    }
 
     const auto features = simd::cpuFeatures();
     const Lyra2Backend envOverride = envLyraBackendOverride();
@@ -174,25 +189,32 @@ const char* lyra2WebActiveBackendName()
     const auto features = simd::cpuFeatures();
     const Lyra2Backend envOverride = envLyraBackendOverride();
     const Lyra2Backend backend = envOverride != Lyra2Backend::Auto ? envOverride : effectiveLyraBackend(features);
-    if (backend == Lyra2Backend::Scalar)
+    if (backend == Lyra2Backend::Scalar) {
         return "scalar";
-    if (backend == Lyra2Backend::Sse2 && features.sse2)
+    }
+    if (backend == Lyra2Backend::Sse2 && features.sse2) {
         return "SSE2 2-way";
-    if (backend == Lyra2Backend::Avx2 && features.avx2)
+    }
+    if (backend == Lyra2Backend::Avx2 && features.avx2) {
         return "AVX2 4-way";
-    if (backend == Lyra2Backend::Avx512 && features.avx512f)
+    }
+    if (backend == Lyra2Backend::Avx512 && features.avx512f) {
         return "AVX-512 8-way";
+    }
     return "scalar";
 }
 
 size_t lyra2WebSimdLanes(const Lyra2Context& ctx)
 {
-    if (ctx.simd512Handle())
+    if (ctx.simd512Handle()) {
         return 8;
-    if (ctx.simdHandle())
+    }
+    if (ctx.simdHandle()) {
         return 4;
-    if (ctx.simdSse2Handle())
+    }
+    if (ctx.simdSse2Handle()) {
         return 2;
+    }
     return 1;
 }
 
@@ -226,8 +248,9 @@ bool lyra2WebFullTest(const uint8_t hash[32], const uint8_t target[8])
 
 uint64_t nonceSpanCount(uint64_t first, uint64_t last)
 {
-    if (last < first)
+    if (last < first) {
         return 0;
+    }
     const uint64_t distance = last - first;
     return distance == UINT64_MAX ? UINT64_MAX : distance + 1;
 }
@@ -238,8 +261,9 @@ bool scanHashLyra2Web(Lyra2Context& ctx, std::vector<uint8_t>& blob, uint32_t tc
                        const uint8_t target[8], uint64_t maxNonce, uint64_t& nonceInOut,
                        std::atomic<bool>& restart, uint64_t& hashesDone, uint8_t resultHash[32])
 {
-    if (blob.size() < 8)
+    if (blob.size() < 8) {
         throw std::runtime_error("Webchain job blob is smaller than the 8-byte nonce field");
+    }
 
     if (nonceInOut > maxNonce) {
         hashesDone = 0;
@@ -261,12 +285,15 @@ bool scanHashLyra2Web(Lyra2Context& ctx, std::vector<uint8_t>& blob, uint32_t tc
             const uint64_t remaining = maxNonce - current + 1;
             const uint64_t lanes = remaining < batch ? remaining : batch;
             uint8_t hashes[8][32]{};
-            if (ctx.simd512Handle())
+            if (ctx.simd512Handle()) {
                 simd::lyra2Avx512Hash8(*ctx.simd512Handle(), blob.data(), blob.size(), current, tcost, hashes);
-            else if (ctx.simdHandle())
+            }
+            else if (ctx.simdHandle()) {
                 simd::lyra2Avx2Hash4(*ctx.simdHandle(), blob.data(), blob.size(), current, tcost, hashes);
-            else
+            }
+            else {
                 simd::lyra2Sse2Hash2(*ctx.simdSse2Handle(), blob.data(), blob.size(), current, tcost, hashes);
+            }
             for (uint64_t lane = 0; lane < lanes; ++lane) {
                 if (lyra2WebFullTest(hashes[lane], target)) {
                     const uint64_t winningNonce = current + lane;
@@ -278,8 +305,9 @@ bool scanHashLyra2Web(Lyra2Context& ctx, std::vector<uint8_t>& blob, uint32_t tc
                 }
             }
             lastTried = current + lanes - 1;
-            if (lanes == remaining || restart.load(std::memory_order_relaxed))
+            if (lanes == remaining || restart.load(std::memory_order_relaxed)) {
                 break;
+            }
             current += lanes;
         }
         nonceInOut = lastTried;
@@ -337,30 +365,36 @@ bool lyra2WebSelfTest()
     uint8_t hash[32];
 
     lyra2WebHash(ctx, kTestInput, sizeof(kTestInput), 4, hash);
-    if (std::memcmp(hash, kTestOutputTcost4, 32) != 0)
+    if (std::memcmp(hash, kTestOutputTcost4, 32) != 0) {
         return false;
+    }
 
     lyra2WebHash(ctx, kTestInput, sizeof(kTestInput), 1, hash);
-    if (std::memcmp(hash, kTestOutputTcost1, 32) != 0)
+    if (std::memcmp(hash, kTestOutputTcost1, 32) != 0) {
         return false;
+    }
 
     if (ctx.simd512Handle() || ctx.simdHandle() || ctx.simdSse2Handle()) {
         uint8_t simdHashes[8][32];
         uint8_t laneBlob[sizeof(kTestInput)];
         const uint64_t lanes = ctx.simd512Handle() ? 8 : (ctx.simdHandle() ? 4 : 2);
         for (uint32_t tcost : {1u, 4u}) {
-            if (ctx.simd512Handle())
+            if (ctx.simd512Handle()) {
                 simd::lyra2Avx512Hash8(*ctx.simd512Handle(), kTestInput, sizeof(kTestInput), 0, tcost, simdHashes);
-            else if (ctx.simdHandle())
+            }
+            else if (ctx.simdHandle()) {
                 simd::lyra2Avx2Hash4(*ctx.simdHandle(), kTestInput, sizeof(kTestInput), 0, tcost, simdHashes);
-            else
+            }
+            else {
                 simd::lyra2Sse2Hash2(*ctx.simdSse2Handle(), kTestInput, sizeof(kTestInput), 0, tcost, simdHashes);
+            }
             for (uint64_t lane = 0; lane < lanes; ++lane) {
                 std::memcpy(laneBlob, kTestInput, sizeof(laneBlob));
                 std::memcpy(laneBlob + sizeof(laneBlob) - sizeof(uint64_t), &lane, sizeof(lane));
                 lyra2WebHash(ctx, laneBlob, sizeof(laneBlob), tcost, hash);
-                if (std::memcmp(hash, simdHashes[lane], 32) != 0)
+                if (std::memcmp(hash, simdHashes[lane], 32) != 0) {
                     return false;
+                }
             }
         }
     }
@@ -380,7 +414,7 @@ const uint8_t kBenchBlob[76] = {
 
 void pushBenchResult(std::vector<BackendBenchResult>& results, const char* name, uint64_t totalHashes, double elapsed)
 {
-    results.push_back({name, elapsed > 0.0 ? double(totalHashes) / elapsed : 0.0});
+    results.push_back({name, elapsed > 0.0 ? static_cast<double>(totalHashes) / elapsed : 0.0});
 }
 
 void benchmarkScalarLyra(std::vector<BackendBenchResult>& results, uint32_t tcost, double seconds)

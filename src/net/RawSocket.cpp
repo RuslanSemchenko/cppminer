@@ -46,8 +46,9 @@ bool RawSocket::connect(const std::string& url, int connectTimeoutSeconds, std::
     // authentication and leaves stratum credentials/shares vulnerable to MITM.
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, tls.verifyPeer ? 1L : 0L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, tls.verifyPeer ? 2L : 0L);
-    if (!tls.pinnedPublicKey.empty())
+    if (!tls.pinnedPublicKey.empty()) {
         curl_easy_setopt(curl, CURLOPT_PINNEDPUBLICKEY, tls.pinnedPublicKey.c_str());
+    }
     curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1L);
 
     CURLcode rc = curl_easy_perform(curl);
@@ -86,8 +87,9 @@ bool RawSocket::isConnected() const
 
 bool RawSocket::waitReadable(int timeoutMs) const
 {
-    if (!curl_)
+    if (!curl_) {
         return false;
+    }
 
     fd_set readSet;
     FD_ZERO(&readSet);
@@ -110,22 +112,26 @@ bool RawSocket::waitReadable(int timeoutMs) const
 
 int RawSocket::recvSome(char* buf, size_t bufSize)
 {
-    if (!curl_)
+    if (!curl_) {
         return -1;
+    }
 
     size_t n = 0;
     CURLcode rc = curl_easy_recv(static_cast<CURL*>(curl_), buf, bufSize, &n);
-    if (rc == CURLE_OK)
+    if (rc == CURLE_OK) {
         return n > 0 ? static_cast<int>(n) : -1; // 0 bytes + CURLE_OK means the peer closed the connection
-    if (rc == CURLE_AGAIN)
+    }
+    if (rc == CURLE_AGAIN) {
         return 0;
+    }
     return -1;
 }
 
 bool RawSocket::sendAll(const char* data, size_t len)
 {
-    if (!curl_)
+    if (!curl_) {
         return false;
+    }
 
     size_t sent = 0;
     int stallRetries = 0;
@@ -138,8 +144,9 @@ bool RawSocket::sendAll(const char* data, size_t len)
             continue;
         }
         if (rc == CURLE_AGAIN) {
-            if (++stallRetries > 2000) // roughly 10s of retrying in 5ms steps
+            if (++stallRetries > 2000) { // roughly 10s of retrying in 5ms steps
                 return false;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
             continue;
         }

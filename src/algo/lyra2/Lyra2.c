@@ -52,12 +52,12 @@ int LYRA2(void *ctx2, void *K, int64_t kLen, const void *pwd, int32_t pwdlen, ui
 	int64_t row = 2; //index of row to be processed
 	int64_t prev = 1; //index of prev (last row ever computed/modified)
 	int64_t rowa = 0; //index of row* (a previous row, deterministically picked during Setup and randomly picked while Wandering)
-	int64_t tau; //Time Loop iterator
+	int64_t tau = 0; //Time Loop iterator
 	int64_t step = 1; //Visitation step (used during Setup and Wandering phases)
 	int64_t window = 2; //Visitation window (used to define which rows can be revisited during Setup)
 	int64_t gap = 1; //Modifier to the step, assuming the values 1 or -1
-	int64_t i; //auxiliary iteration counter
-	int64_t v64; // 64bit var for memcpy
+	int64_t i = 0; //auxiliary iteration counter
+	int64_t v64 = 0; // 64bit var for memcpy
 	//==========================================================================/
 
 	//========== Initializing the Memory Matrix and pointers to it =============//
@@ -135,9 +135,9 @@ int LYRA2(void *ctx2, void *K, int64_t kLen, const void *pwd, int32_t pwdlen, ui
 
 		//updates the value of row* (deterministically picked during Setup))
 		rowa = (rowa + step) & (window - 1);
-		__builtin_prefetch((uint64_t*)(memMatrix(rowa))+0);
-		__builtin_prefetch((uint64_t*)(memMatrix(rowa))+4);
-		__builtin_prefetch((uint64_t*)(memMatrix(rowa))+8);
+		__builtin_prefetch(memMatrix(rowa)+0);
+		__builtin_prefetch(memMatrix(rowa)+4);
+		__builtin_prefetch(memMatrix(rowa)+8);
 		//update prev: it now points to the last row ever computed
 		prev = row;
 		//updates row: goes to the next row to be computed
@@ -164,9 +164,9 @@ int LYRA2(void *ctx2, void *K, int64_t kLen, const void *pwd, int32_t pwdlen, ui
 			rowa = state[0] & (unsigned int)(NROWS-1);  //(USE THIS IF NROWS IS A POWER OF 2)
 			//rowa = state[0] % NROWS; //(USE THIS FOR THE "GENERIC" CASE)
 			//------------------------------------------------------------------------------------------
-			__builtin_prefetch((uint64_t*)(memMatrix(rowa))+0);
-			__builtin_prefetch((uint64_t*)(memMatrix(rowa))+4);
-			__builtin_prefetch((uint64_t*)(memMatrix(rowa))+8);
+			__builtin_prefetch(memMatrix(rowa)+0);
+			__builtin_prefetch(memMatrix(rowa)+4);
+			__builtin_prefetch(memMatrix(rowa)+8);
 
 			//Performs a reduced-round duplexing operation over M[row*] XOR M[prev], updating both M[row*] and M[row]
 			reducedDuplexRow(state, memMatrix(prev), memMatrix(rowa), memMatrix(row), ctx);

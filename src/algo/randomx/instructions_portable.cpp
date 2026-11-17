@@ -223,10 +223,12 @@ void rx_set_double_precision() {
 
 #endif //RANDOMX_USE_X87
 
-union double_ser_t {
-	double f;
-	uint64_t i;
-};
+namespace {
+	union double_ser_t {
+		double f;
+		uint64_t i;
+	};
+}
 
 double loadDoublePortable(const void* addr) {
 	double_ser_t ds;

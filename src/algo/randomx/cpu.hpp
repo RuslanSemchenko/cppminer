@@ -32,7 +32,7 @@ namespace randomx {
 
 	class Cpu {
 	public:
-		Cpu();
+		Cpu() noexcept;
 
 		inline bool hasAes() const { return aes_; }
 		inline bool hasSsse3() const { return ssse3_; }

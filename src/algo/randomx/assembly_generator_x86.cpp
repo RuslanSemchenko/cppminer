@@ -69,7 +69,7 @@ namespace randomx {
 #endif
 		for (unsigned i = 0; i < prog.getSize(); ++i) {
 			Instruction& instr = prog(i);
-			switch ((SuperscalarInstructionType)instr.opcode)
+			switch (static_cast<SuperscalarInstructionType>(instr.opcode))
 			{
 			case SuperscalarInstructionType::ISUB_R:
 				asmCode << "sub " << regR[instr.dst] << ", " << regR[instr.src] << std::endl;
@@ -87,31 +87,31 @@ namespace randomx {
 				asmCode << "ror " << regR[instr.dst] << ", " << instr.getImm32() << std::endl;
 				break;
 			case SuperscalarInstructionType::IADD_C7:
-				asmCode << "add " << regR[instr.dst] << ", " << (int32_t)instr.getImm32() << std::endl;
+				asmCode << "add " << regR[instr.dst] << ", " << static_cast<int32_t>(instr.getImm32()) << std::endl;
 				break;
 			case SuperscalarInstructionType::IXOR_C7:
-				asmCode << "xor " << regR[instr.dst] << ", " << (int32_t)instr.getImm32() << std::endl;
+				asmCode << "xor " << regR[instr.dst] << ", " << static_cast<int32_t>(instr.getImm32()) << std::endl;
 				break;
 			case SuperscalarInstructionType::IADD_C8:
-				asmCode << "add " << regR[instr.dst] << ", " << (int32_t)instr.getImm32() << std::endl;
+				asmCode << "add " << regR[instr.dst] << ", " << static_cast<int32_t>(instr.getImm32()) << std::endl;
 #ifdef RANDOMX_ALIGN
 				asmCode << "nop" << std::endl;
 #endif
 				break;
 			case SuperscalarInstructionType::IXOR_C8:
-				asmCode << "xor " << regR[instr.dst] << ", " << (int32_t)instr.getImm32() << std::endl;
+				asmCode << "xor " << regR[instr.dst] << ", " << static_cast<int32_t>(instr.getImm32()) << std::endl;
 #ifdef RANDOMX_ALIGN
 				asmCode << "nop" << std::endl;
 #endif
 				break;
 			case SuperscalarInstructionType::IADD_C9:
-				asmCode << "add " << regR[instr.dst] << ", " << (int32_t)instr.getImm32() << std::endl;
+				asmCode << "add " << regR[instr.dst] << ", " << static_cast<int32_t>(instr.getImm32()) << std::endl;
 #ifdef RANDOMX_ALIGN
 				asmCode << "xchg ax, ax ;nop" << std::endl;
 #endif
 				break;
 			case SuperscalarInstructionType::IXOR_C9:
-				asmCode << "xor " << regR[instr.dst] << ", " << (int32_t)instr.getImm32() << std::endl;
+				asmCode << "xor " << regR[instr.dst] << ", " << static_cast<int32_t>(instr.getImm32()) << std::endl;
 #ifdef RANDOMX_ALIGN
 				asmCode << "xchg ax, ax ;nop" << std::endl;
 #endif
@@ -127,7 +127,7 @@ namespace randomx {
 				asmCode << "mov " << regR[instr.dst] << ", rdx" << std::endl;
 				break;
 			case SuperscalarInstructionType::IMUL_RCP:
-				asmCode << "mov rax, " << (int64_t)randomx_reciprocal(instr.getImm32()) << std::endl;
+				asmCode << "mov rax, " << static_cast<int64_t>(randomx_reciprocal(instr.getImm32())) << std::endl;
 				asmCode << "imul " << regR[instr.dst] << ", rax" << std::endl;
 				break;
 			default:
@@ -186,7 +186,7 @@ namespace randomx {
 		asmCode << "uint64_t r8 = r[0], r9 = r[1], r10 = r[2], r11 = r[3], r12 = r[4], r13 = r[5], r14 = r[6], r15 = r[7];" << std::endl;
 		for (unsigned i = 0; i < prog.getSize(); ++i) {
 			Instruction& instr = prog(i);
-			switch ((SuperscalarInstructionType)instr.opcode)
+			switch (static_cast<SuperscalarInstructionType>(instr.opcode))
 			{
 			case SuperscalarInstructionType::ISUB_R:
 				asmCode << regR[instr.dst] << " -= " << regR[instr.src] << ";" << std::endl;
@@ -206,12 +206,12 @@ namespace randomx {
 			case SuperscalarInstructionType::IADD_C7:
 			case SuperscalarInstructionType::IADD_C8:
 			case SuperscalarInstructionType::IADD_C9:
-				asmCode << regR[instr.dst] << " += " << (int32_t)instr.getImm32() << ";" << std::endl;
+				asmCode << regR[instr.dst] << " += " << static_cast<int32_t>(instr.getImm32()) << ";" << std::endl;
 				break;
 			case SuperscalarInstructionType::IXOR_C7:
 			case SuperscalarInstructionType::IXOR_C8:
 			case SuperscalarInstructionType::IXOR_C9:
-				asmCode << regR[instr.dst] << " ^= " << (int32_t)instr.getImm32() << ";" << std::endl;
+				asmCode << regR[instr.dst] << " ^= " << static_cast<int32_t>(instr.getImm32()) << ";" << std::endl;
 				break;
 			case SuperscalarInstructionType::IMULH_R:
 				asmCode << regR[instr.dst] << " = mulh(" << regR[instr.dst] << ", " << regR[instr.src] << ");" << std::endl;
@@ -220,7 +220,7 @@ namespace randomx {
 				asmCode << regR[instr.dst] << " = smulh(" << regR[instr.dst] << ", " << regR[instr.src] << ");" << std::endl;
 				break;
 			case SuperscalarInstructionType::IMUL_RCP:
-				asmCode << regR[instr.dst] << " *= " << (int64_t)randomx_reciprocal(instr.getImm32()) << ";" << std::endl;
+				asmCode << regR[instr.dst] << " *= " << static_cast<int64_t>(randomx_reciprocal(instr.getImm32())) << ";" << std::endl;
 				break;
 			default:
 				UNREACHABLE;
@@ -255,12 +255,12 @@ namespace randomx {
 	}
 
 	void AssemblyGeneratorX86::genAddressReg(Instruction& instr, const char* reg = "eax") {
-		asmCode << "\tlea " << reg << ", [" << regR32[instr.src] << std::showpos << (int32_t)instr.getImm32() << std::noshowpos << "]" << std::endl;
+		asmCode << "\tlea " << reg << ", [" << regR32[instr.src] << std::showpos << static_cast<int32_t>(instr.getImm32()) << std::noshowpos << "]" << std::endl;
 		asmCode << "\tand " << reg << ", " << ((instr.getModMem()) ? ScratchpadL1Mask : ScratchpadL2Mask) << std::endl;
 	}
 
 	void AssemblyGeneratorX86::genAddressRegDst(Instruction& instr, int maskAlign = 8) {
-		asmCode << "\tlea eax, [" << regR32[instr.dst] << std::showpos << (int32_t)instr.getImm32() << std::noshowpos << "]" << std::endl;
+		asmCode << "\tlea eax, [" << regR32[instr.dst] << std::showpos << static_cast<int32_t>(instr.getImm32()) << std::noshowpos << "]" << std::endl;
 		int mask;
 		if (instr.getModCond() < StoreL3Condition) {
 			mask = instr.getModMem() ? ScratchpadL1Mask : ScratchpadL2Mask;
@@ -272,13 +272,13 @@ namespace randomx {
 	}
 
 	int32_t AssemblyGeneratorX86::genAddressImm(Instruction& instr) {
-		return (int32_t)instr.getImm32() & ScratchpadL3Mask;
+		return static_cast<int32_t>(instr.getImm32()) & ScratchpadL3Mask;
 	}
 
 	void AssemblyGeneratorX86::h_IADD_RS(Instruction& instr, [[maybe_unused]] int i) {
 		registerUsage[instr.dst] = i;
 		if(instr.dst == RegisterNeedsDisplacement)
-			asmCode << "\tlea " << regR[instr.dst] << ", [" << regR[instr.dst] << "+" << regR[instr.src] << "*" << (1 << (instr.getModShift())) << std::showpos << (int32_t)instr.getImm32() << std::noshowpos << "]" << std::endl;
+			asmCode << "\tlea " << regR[instr.dst] << ", [" << regR[instr.dst] << "+" << regR[instr.src] << "*" << (1 << (instr.getModShift())) << std::showpos << static_cast<int32_t>(instr.getImm32()) << std::noshowpos << "]" << std::endl;
 		else
 			asmCode << "\tlea " << regR[instr.dst] << ", [" << regR[instr.dst] << "+" << regR[instr.src] << "*" << (1 << (instr.getModShift())) << "]" << std::endl;
 		traceint(instr);
@@ -302,7 +302,7 @@ namespace randomx {
 			asmCode << "\tsub " << regR[instr.dst] << ", " << regR[instr.src] << std::endl;
 		}
 		else {
-			asmCode << "\tsub " << regR[instr.dst] << ", " << (int32_t)instr.getImm32() << std::endl;
+			asmCode << "\tsub " << regR[instr.dst] << ", " << static_cast<int32_t>(instr.getImm32()) << std::endl;
 		}
 		traceint(instr);
 	}
@@ -325,7 +325,7 @@ namespace randomx {
 			asmCode << "\timul " << regR[instr.dst] << ", " << regR[instr.src] << std::endl;
 		}
 		else {
-			asmCode << "\timul " << regR[instr.dst] << ", " << (int32_t)instr.getImm32() << std::endl;
+			asmCode << "\timul " << regR[instr.dst] << ", " << static_cast<int32_t>(instr.getImm32()) << std::endl;
 		}
 		traceint(instr);
 	}
@@ -400,7 +400,7 @@ namespace randomx {
 			asmCode << "\txor " << regR[instr.dst] << ", " << regR[instr.src] << std::endl;
 		}
 		else {
-			asmCode << "\txor " << regR[instr.dst] << ", " << (int32_t)instr.getImm32() << std::endl;
+			asmCode << "\txor " << regR[instr.dst] << ", " << static_cast<int32_t>(instr.getImm32()) << std::endl;
 		}
 		traceint(instr);
 	}

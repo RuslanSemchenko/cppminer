@@ -38,7 +38,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "argon2.h"
 
-void randomx_argon2_fill_segment_avx2(const argon2_instance_t* instance,
+static void randomx_argon2_fill_segment_avx2(const argon2_instance_t* instance,
 	argon2_position_t position);
 
 randomx_argon2_impl* randomx_argon2_impl_avx2(void) {
@@ -92,7 +92,7 @@ static void fill_block(__m256i* state, const block* ref_block,
 	}
 }
 
-void randomx_argon2_fill_segment_avx2(const argon2_instance_t* instance,
+static void randomx_argon2_fill_segment_avx2(const argon2_instance_t* instance,
 	argon2_position_t position) {
 	block* ref_block = NULL, * curr_block = NULL;
 	uint64_t pseudo_rand, ref_index, ref_lane;

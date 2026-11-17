@@ -36,10 +36,12 @@ void sha256Transform4way(uint32_t state[4 * 8], const uint32_t blocks[4 * 16])
 {
     constexpr int N = 4;
     V w[64];
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 16; i++) {
         w[i] = _mm_loadu_si128(reinterpret_cast<const __m128i*>(blocks + i * N));
-    for (int i = 16; i < 64; i++)
+    }
+    for (int i = 16; i < 64; i++) {
         w[i] = add(add(smallS1(w[i - 2]), w[i - 7]), add(smallS0(w[i - 15]), w[i - 16]));
+    }
 
     V a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(state + 0 * N));
     V b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(state + 1 * N));

@@ -55,7 +55,7 @@ double benchmarkMultiThreadSha256d(int threads, double seconds)
                 nonce = maxNonce + 1;
                 elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
             }
-            rates[static_cast<size_t>(t)] = elapsed > 0.0 ? double(totalHashes) / elapsed : 0.0;
+            rates[static_cast<size_t>(t)] = elapsed > 0.0 ? static_cast<double>(totalHashes) / elapsed : 0.0;
         });
     }
     for (auto& w : workers) {
@@ -91,7 +91,7 @@ double benchmarkMultiThreadScrypt(int threads, uint32_t costN, double seconds)
                 nonce = maxNonce + 1;
                 elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
             }
-            rates[static_cast<size_t>(t)] = elapsed > 0.0 ? double(totalHashes) / elapsed : 0.0;
+            rates[static_cast<size_t>(t)] = elapsed > 0.0 ? static_cast<double>(totalHashes) / elapsed : 0.0;
         });
     }
     for (auto& w : workers) {
@@ -132,8 +132,9 @@ double benchmarkMultiThreadRandomX(int threads, double seconds, bool fullMemory,
                 std::string error;
                 if (!algo::scanHashRandomX(ctx, blob, 39, seed, target, maxNonce, nonce, restart,
                                             hashesDone, resultHash, error) || !error.empty()) {
-                    if (!error.empty())
+                    if (!error.empty()) {
                         logf(LogLevel::Error, "RandomX benchmark error: %s", error.c_str());
+                    }
                     totalHashes += hashesDone;
                 } else {
                     totalHashes += hashesDone;
@@ -141,7 +142,7 @@ double benchmarkMultiThreadRandomX(int threads, double seconds, bool fullMemory,
                 nonce = maxNonce == 0xffffffffu ? static_cast<uint32_t>(t) << 24 : maxNonce + 1;
                 elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
             }
-            rates[static_cast<size_t>(t)] = elapsed > 0.0 ? double(totalHashes) / elapsed : 0.0;
+            rates[static_cast<size_t>(t)] = elapsed > 0.0 ? static_cast<double>(totalHashes) / elapsed : 0.0;
         });
     }
     for (auto& w : workers) {
@@ -164,7 +165,7 @@ double benchmarkMultiThreadLyra2Web(int threads, uint32_t tcost, double seconds)
             std::vector<uint8_t> blob(76, 0x55);
             uint8_t target[8] = {0, 0, 0, 0, 0, 0, 0, 0};
             std::atomic<bool> restart{false};
-            uint64_t nonce = uint64_t(t) << 40;
+            uint64_t nonce = static_cast<uint64_t>(t) << 40;
             uint64_t totalHashes = 0;
             uint8_t resultHash[32];
             auto t0 = std::chrono::steady_clock::now();
@@ -177,7 +178,7 @@ double benchmarkMultiThreadLyra2Web(int threads, uint32_t tcost, double seconds)
                 nonce = maxNonce + 1;
                 elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
             }
-            rates[static_cast<size_t>(t)] = elapsed > 0.0 ? double(totalHashes) / elapsed : 0.0;
+            rates[static_cast<size_t>(t)] = elapsed > 0.0 ? static_cast<double>(totalHashes) / elapsed : 0.0;
         });
     }
     for (auto& w : workers) {

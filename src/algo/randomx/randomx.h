@@ -31,6 +31,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stddef.h>
 #include <stdint.h>
+#if defined(__cplusplus)
+#include <bit>
+#endif
 
 #define RANDOMX_HASH_SIZE 32
 #define RANDOMX_DATASET_ITEM_SIZE 64
@@ -39,7 +42,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define RANDOMX_EXPORT
 #endif
 
+#if defined(__cplusplus)
+typedef enum : uint32_t {
+#else
 typedef enum {
+#endif
   RANDOMX_FLAG_DEFAULT = 0,
   RANDOMX_FLAG_LARGE_PAGES = 1,
   RANDOMX_FLAG_HARD_AES = 2,
@@ -69,10 +76,10 @@ typedef struct randomx_vm randomx_vm;
 #endif
 
 inline CONSTEXPR randomx_flags operator |(randomx_flags a, randomx_flags b) {
-	return static_cast<randomx_flags>(static_cast<int>(a) | static_cast<int>(b));
+	return std::bit_cast<randomx_flags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
 }
 inline CONSTEXPR randomx_flags operator &(randomx_flags a, randomx_flags b) {
-	return static_cast<randomx_flags>(static_cast<int>(a) & static_cast<int>(b));
+	return std::bit_cast<randomx_flags>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
 }
 inline randomx_flags& operator |=(randomx_flags& a, randomx_flags b) {
 	return a = a | b;

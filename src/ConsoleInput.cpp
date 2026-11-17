@@ -35,29 +35,34 @@ void keyThreadMain()
     while (!g_keyStop.load(std::memory_order_relaxed)) {
         if (_kbhit()) {
             const int ch = _getch();
-            if (ch == 'h' || ch == 'H')
-                if (g_onHashrateKey)
+            if (ch == 'h' || ch == 'H') {
+                if (g_onHashrateKey) {
                     g_onHashrateKey();
+                }
+            }
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
 #else
     termios oldMode{};
-    if (tcgetattr(STDIN_FILENO, &oldMode) != 0)
+    if (tcgetattr(STDIN_FILENO, &oldMode) != 0) {
         return;
+    }
     termios rawMode = oldMode;
     rawMode.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
     rawMode.c_cc[VMIN] = 0;
     rawMode.c_cc[VTIME] = 1; // 0.1 s read timeout
-    if (tcsetattr(STDIN_FILENO, TCSANOW, &rawMode) != 0)
+    if (tcsetattr(STDIN_FILENO, TCSANOW, &rawMode) != 0) {
         return;
+    }
 
     while (!g_keyStop.load(std::memory_order_relaxed)) {
         char ch = 0;
         const ssize_t n = read(STDIN_FILENO, &ch, 1);
-        if (n == 1 && (ch == 'h' || ch == 'H') && g_onHashrateKey)
+        if (n == 1 && (ch == 'h' || ch == 'H') && g_onHashrateKey) {
             g_onHashrateKey();
+        }
     }
 
     tcsetattr(STDIN_FILENO, TCSANOW, &oldMode);
@@ -69,8 +74,9 @@ void keyThreadMain()
 void startConsoleKeyWatcher(std::function<void()> onHashrateKey)
 {
     stopConsoleKeyWatcher();
-    if (!stdinIsInteractive())
+    if (!stdinIsInteractive()) {
         return;
+    }
     g_onHashrateKey = std::move(onHashrateKey);
     g_keyStop.store(false, std::memory_order_relaxed);
     g_keyThread = std::thread(keyThreadMain);
@@ -79,8 +85,9 @@ void startConsoleKeyWatcher(std::function<void()> onHashrateKey)
 void stopConsoleKeyWatcher()
 {
     g_keyStop.store(true, std::memory_order_relaxed);
-    if (g_keyThread.joinable())
+    if (g_keyThread.joinable()) {
         g_keyThread.join();
+    }
     g_onHashrateKey = nullptr;
 }
 

@@ -18,8 +18,9 @@ cppminer::MinerEngine* g_engine = nullptr;
 
 void handleSignal(int)
 {
-    if (g_engine)
+    if (g_engine) {
         g_engine->requestStop();
+    }
 }
 
 } // namespace
@@ -28,8 +29,9 @@ int main(int argc, char** argv)
 {
     cppminer::Config config;
     int exitCode = 0;
-    if (!cppminer::Config::parse(argc, argv, config, exitCode))
+    if (!cppminer::Config::parse(argc, argv, config, exitCode)) {
         return exitCode;
+    }
 
     cppminer::logSetDebug(config.debug);
     cppminer::logSetQuiet(config.quiet);
@@ -48,11 +50,13 @@ int main(int argc, char** argv)
         cppminer::logf(cppminer::LogLevel::Error, "%s", lyraBackendError.c_str());
         return 1;
     }
-    if (config.algo == cppminer::Algorithm::Lyra2Web || config.benchmark)
+    if (config.algo == cppminer::Algorithm::Lyra2Web || config.benchmark) {
         cppminer::logf(cppminer::LogLevel::Info, "lyra2web backend: %s", cppminer::algo::lyra2WebActiveBackendName());
+    }
 
-    if (config.benchmark)
+    if (config.benchmark) {
         return cppminer::runBenchmark(config);
+    }
 
     bool selfTestOk = true;
     switch (config.algo) {

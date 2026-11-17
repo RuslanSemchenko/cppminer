@@ -30,8 +30,9 @@ inline void store(uint32_t* p, V v) { _mm256_storeu_si256(reinterpret_cast<__m25
 void xorSalsa8(V B[16], const V Bx[16])
 {
     V x[16];
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 16; i++) {
         x[i] = B[i] = xorv(B[i], Bx[i]);
+    }
 
     for (int r = 0; r < 8; r += 2) {
         x[4] = xorv(x[4], rotl(add(x[0], x[12]), 7));    x[9] = xorv(x[9], rotl(add(x[5], x[1]), 7));
@@ -53,8 +54,9 @@ void xorSalsa8(V B[16], const V Bx[16])
         x[10] = xorv(x[10], rotl(add(x[9], x[8]), 18));  x[15] = xorv(x[15], rotl(add(x[14], x[13]), 18));
     }
 
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 16; i++) {
         B[i] = add(B[i], x[i]);
+    }
 }
 
 } // namespace
@@ -62,13 +64,15 @@ void xorSalsa8(V B[16], const V Bx[16])
 void scryptRomix8way(uint32_t B[32 * W8], uint32_t* V_, uint32_t costN)
 {
     V x[32];
-    for (int i = 0; i < 32; i++)
+    for (int i = 0; i < 32; i++) {
         x[i] = load(B + i * W8);
+    }
 
     for (uint32_t row = 0; row < costN; row++) {
         uint32_t* dst = V_ + static_cast<size_t>(row) * 32 * W8;
-        for (int i = 0; i < 32; i++)
+        for (int i = 0; i < 32; i++) {
             store(dst + i * W8, x[i]);
+        }
         xorSalsa8(x + 0, x + 16);
         xorSalsa8(x + 16, x + 0);
     }
@@ -79,16 +83,18 @@ void scryptRomix8way(uint32_t B[32 * W8], uint32_t* V_, uint32_t costN)
         store(j, jVec);
         for (int i = 0; i < 32; i++) {
             uint32_t gathered[W8];
-            for (int lane = 0; lane < W8; lane++)
+            for (int lane = 0; lane < W8; lane++) {
                 gathered[lane] = V_[static_cast<size_t>(j[lane]) * 32 * W8 + static_cast<size_t>(i) * W8 + lane];
+            }
             x[i] = xorv(x[i], load(gathered));
         }
         xorSalsa8(x + 0, x + 16);
         xorSalsa8(x + 16, x + 0);
     }
 
-    for (int i = 0; i < 32; i++)
+    for (int i = 0; i < 32; i++) {
         store(B + i * W8, x[i]);
+    }
 }
 
 } // namespace cppminer::simd

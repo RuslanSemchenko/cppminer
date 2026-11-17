@@ -42,7 +42,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define __SSSE3__ 1
 #endif
 
-void randomx_argon2_fill_segment_ssse3(const argon2_instance_t* instance,
+static void randomx_argon2_fill_segment_ssse3(const argon2_instance_t* instance,
 	argon2_position_t position);
 
 randomx_argon2_impl* randomx_argon2_impl_ssse3(void) {
@@ -100,7 +100,7 @@ static void fill_block(__m128i* state, const block* ref_block,
 	}
 }
 
-void randomx_argon2_fill_segment_ssse3(const argon2_instance_t* instance,
+static void randomx_argon2_fill_segment_ssse3(const argon2_instance_t* instance,
 	argon2_position_t position) {
 	block* ref_block = NULL, * curr_block = NULL;
 	uint64_t pseudo_rand, ref_index, ref_lane;

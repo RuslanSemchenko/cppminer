@@ -29,8 +29,9 @@ bool randomXPipelineEnabled()
     size_t length = 0;
     const bool hasValue = _dupenv_s(&value, &length, "CPPMINER_RANDOMX_PIPELINE") == 0 && value != nullptr;
     const bool enabled = !hasValue || std::strcmp(value, "0") != 0;
-    if (value)
+    if (value) {
         free(value);
+    }
     return enabled;
 #else
     const char* value = std::getenv("CPPMINER_RANDOMX_PIPELINE");
@@ -40,27 +41,34 @@ bool randomXPipelineEnabled()
 
 const char* randomXArgonBackendName(randomx_flags flags)
 {
-    if (flags & RANDOMX_FLAG_ARGON2_AVX2)
+    if (flags & RANDOMX_FLAG_ARGON2_AVX2) {
         return "Argon2-AVX2";
-    if (flags & RANDOMX_FLAG_ARGON2_SSSE3)
+    }
+    if (flags & RANDOMX_FLAG_ARGON2_SSSE3) {
         return "Argon2-SSSE3";
+    }
     return "Argon2-scalar";
 }
 
 std::string randomXDescribeFlags(randomx_flags flags)
 {
     std::ostringstream oss;
-    if (flags & RANDOMX_FLAG_JIT)
+    if (flags & RANDOMX_FLAG_JIT) {
         oss << "JIT";
-    else
+    }
+    else {
         oss << "interpreted";
-    if (flags & RANDOMX_FLAG_HARD_AES)
+    }
+    if (flags & RANDOMX_FLAG_HARD_AES) {
         oss << " + Hard-AES";
-    else
+    }
+    else {
         oss << " + soft-AES";
+    }
     oss << " + " << randomXArgonBackendName(flags);
-    if (randomXPipelineEnabled())
+    if (randomXPipelineEnabled()) {
         oss << " + 2-way pipeline";
+    }
     return oss.str();
 }
 
@@ -71,32 +79,38 @@ struct RandomXState::Impl {
         : fullMemory(useFullMemory), largePages(useLargePages)
     {
         flags = randomx_get_flags();
-        if (fullMemory)
+        if (fullMemory) {
             flags = static_cast<randomx_flags>(flags | RANDOMX_FLAG_FULL_MEM);
-        if (largePages)
+        }
+        if (largePages) {
             flags = static_cast<randomx_flags>(flags | RANDOMX_FLAG_LARGE_PAGES);
+        }
 
         const randomx_flags cacheFlags = static_cast<randomx_flags>(
             flags & (RANDOMX_FLAG_JIT | RANDOMX_FLAG_LARGE_PAGES | RANDOMX_FLAG_ARGON2));
         cache = randomx_alloc_cache(cacheFlags);
-        if (!cache)
+        if (!cache) {
             throw std::runtime_error("RandomX cache allocation failed");
+        }
 
         if (fullMemory) {
             const randomx_flags datasetFlags = static_cast<randomx_flags>(flags & RANDOMX_FLAG_LARGE_PAGES);
             dataset = randomx_alloc_dataset(datasetFlags);
-            if (!dataset)
+            if (!dataset) {
                 throw std::runtime_error("RandomX dataset allocation failed");
+            }
             datasetBytes = static_cast<size_t>(randomx_dataset_item_count()) * RANDOMX_DATASET_ITEM_SIZE;
         }
     }
 
     ~Impl()
     {
-        if (dataset)
+        if (dataset) {
             randomx_release_dataset(dataset);
-        if (cache)
+        }
+        if (cache) {
             randomx_release_cache(cache);
+        }
     }
 
     bool fullMemory = false;
@@ -127,14 +141,16 @@ bool RandomXState::prepare(const uint8_t* seed, size_t seedSize, std::string& er
 
     std::unique_lock<std::shared_mutex> lock(impl_->mutex);
     if (impl_->initialized && impl_->seedSize == seedSize &&
-        std::memcmp(impl_->seed.data(), seed, seedSize) == 0)
+        std::memcmp(impl_->seed.data(), seed, seedSize) == 0) {
         return true;
+    }
 
     std::array<uint8_t, 32> nextSeed{};
     std::memcpy(nextSeed.data(), seed, seedSize);
     randomx_init_cache(impl_->cache, seed, seedSize);
-    if (impl_->fullMemory)
+    if (impl_->fullMemory) {
         randomx_init_dataset(impl_->dataset, impl_->cache, 0, randomx_dataset_item_count());
+    }
 
     impl_->seed = nextSeed;
     impl_->seedSize = seedSize;
@@ -169,8 +185,9 @@ RandomXContext::RandomXContext(RandomXState& state)
 
 RandomXContext::~RandomXContext()
 {
-    if (impl_->vm)
+    if (impl_->vm) {
         randomx_destroy_vm(impl_->vm);
+    }
 }
 
 bool RandomXContext::hash(const uint8_t* input, size_t inputSize, const uint8_t* seed, size_t seedSize,
@@ -180,8 +197,9 @@ bool RandomXContext::hash(const uint8_t* input, size_t inputSize, const uint8_t*
         error = "RandomX hash input/output is invalid";
         return false;
     }
-    if (!impl_->state.prepare(seed, seedSize, error))
+    if (!impl_->state.prepare(seed, seedSize, error)) {
         return false;
+    }
 
     RandomXState::Impl& state = *impl_->state.impl_;
     std::shared_lock<std::shared_mutex> lock(state.mutex);
@@ -206,10 +224,12 @@ bool RandomXContext::hash(const uint8_t* input, size_t inputSize, const uint8_t*
 
     if (!impl_->bound || impl_->boundSeedSize != state.seedSize ||
         std::memcmp(impl_->boundSeed.data(), state.seed.data(), state.seedSize) != 0) {
-        if (state.fullMemory)
+        if (state.fullMemory) {
             randomx_vm_set_dataset(impl_->vm, state.dataset);
-        else
+        }
+        else {
             randomx_vm_set_cache(impl_->vm, state.cache);
+        }
         impl_->boundSeed = state.seed;
         impl_->boundSeedSize = state.seedSize;
         impl_->bound = true;
@@ -227,8 +247,9 @@ bool RandomXContext::hashPair(const uint8_t* inputA, size_t inputASize, const ui
         error = "RandomX hashPair input/output is invalid";
         return false;
     }
-    if (!impl_->state.prepare(seed, seedSize, error))
+    if (!impl_->state.prepare(seed, seedSize, error)) {
         return false;
+    }
 
     RandomXState::Impl& state = *impl_->state.impl_;
     std::shared_lock<std::shared_mutex> lock(state.mutex);
@@ -251,10 +272,12 @@ bool RandomXContext::hashPair(const uint8_t* inputA, size_t inputASize, const ui
     }
     if (!impl_->bound || impl_->boundSeedSize != state.seedSize ||
         std::memcmp(impl_->boundSeed.data(), state.seed.data(), state.seedSize) != 0) {
-        if (state.fullMemory)
+        if (state.fullMemory) {
             randomx_vm_set_dataset(impl_->vm, state.dataset);
-        else
+        }
+        else {
             randomx_vm_set_cache(impl_->vm, state.cache);
+        }
         impl_->boundSeed = state.seed;
         impl_->boundSeedSize = state.seedSize;
         impl_->bound = true;
@@ -273,8 +296,9 @@ void randomXHash(RandomXContext& context, std::vector<uint8_t>& blob, size_t non
         error = "RandomX job blob is too short for a 4-byte nonce at the advertised offset";
         return;
     }
-    if (!context.hash(blob.data(), blob.size(), seed.data(), seed.size(), output, error))
+    if (!context.hash(blob.data(), blob.size(), seed.data(), seed.size(), output, error)) {
         return;
+    }
 }
 
 bool scanHashRandomX(RandomXContext& context, const std::vector<uint8_t>& blob, size_t nonceOffset,
@@ -287,8 +311,9 @@ bool scanHashRandomX(RandomXContext& context, const std::vector<uint8_t>& blob, 
         error = "RandomX job blob/target is invalid";
         return false;
     }
-    if (nonceInOut > maxNonce)
+    if (nonceInOut > maxNonce) {
         return false;
+    }
 
     std::vector<uint8_t> inputA = blob;
     std::vector<uint8_t> inputB = blob;
@@ -302,8 +327,9 @@ bool scanHashRandomX(RandomXContext& context, const std::vector<uint8_t>& blob, 
         if (randomXPipelineEnabled() && n < maxNonce) {
             util::le32enc(inputB.data() + nonceOffset, static_cast<uint32_t>(n + 1));
             if (!context.hashPair(inputA.data(), inputA.size(), inputB.data(), inputB.size(),
-                                  seed.data(), seed.size(), hashA, hashB, error))
+                                  seed.data(), seed.size(), hashA, hashB, error)) {
                 return false;
+            }
             hashesDone += 2;
             if (util::le64dec(hashA) <= targetValue) {
                 nonceInOut = static_cast<uint32_t>(n);
@@ -316,9 +342,11 @@ bool scanHashRandomX(RandomXContext& context, const std::vector<uint8_t>& blob, 
                 return true;
             }
             n += 2;
-        } else {
-            if (!context.hash(inputA.data(), inputA.size(), seed.data(), seed.size(), hashA, error))
+        }
+        else {
+            if (!context.hash(inputA.data(), inputA.size(), seed.data(), seed.size(), hashA, error)) {
                 return false;
+            }
             ++hashesDone;
             if (util::le64dec(hashA) <= targetValue) {
                 nonceInOut = static_cast<uint32_t>(n);
@@ -327,11 +355,12 @@ bool scanHashRandomX(RandomXContext& context, const std::vector<uint8_t>& blob, 
             }
             ++n;
         }
-        if (restart.load(std::memory_order_relaxed))
+        if (restart.load(std::memory_order_relaxed)) {
             break;
+        }
     }
 
-    nonceInOut = static_cast<uint32_t>(uint64_t(firstNonce) + (hashesDone ? hashesDone - 1 : 0));
+    nonceInOut = static_cast<uint32_t>(static_cast<uint64_t>(firstNonce) + (hashesDone ? hashesDone - 1 : 0));
     return false;
 }
 
@@ -348,10 +377,12 @@ const char* randomXSimdFeaturesString()
     const randomx_flags flags = randomx_get_flags();
     std::ostringstream oss;
     oss << randomXArgonBackendName(flags);
-    if (flags & RANDOMX_FLAG_HARD_AES)
+    if (flags & RANDOMX_FLAG_HARD_AES) {
         oss << " Hard-AES";
-    if (flags & RANDOMX_FLAG_JIT)
+    }
+    if (flags & RANDOMX_FLAG_JIT) {
         oss << " JIT";
+    }
     features = oss.str();
     return features.c_str();
 }
@@ -377,13 +408,15 @@ std::vector<cppminer::BackendBenchResult> randomXBenchmarkArgonBackends(double s
 
     std::vector<BackendBenchResult> results;
     for (const ArgonBackend& backend : backends) {
-        if (!backend.available)
+        if (!backend.available) {
             continue;
+        }
 
         const randomx_flags cacheFlags = static_cast<randomx_flags>(cacheBaseFlags | backend.argonFlag);
         randomx_cache* cache = randomx_alloc_cache(cacheFlags);
-        if (!cache)
+        if (!cache) {
             continue;
+        }
 
         uint64_t runs = 0;
         const auto t0 = std::chrono::steady_clock::now();
@@ -395,7 +428,7 @@ std::vector<cppminer::BackendBenchResult> randomXBenchmarkArgonBackends(double s
         }
 
         randomx_release_cache(cache);
-        results.push_back({backend.name, elapsed > 0.0 ? double(runs) / elapsed : 0.0});
+        results.push_back({backend.name, elapsed > 0.0 ? static_cast<double>(runs) / elapsed : 0.0});
     }
 
     return results;
@@ -421,20 +454,24 @@ bool randomXSelfTest()
         uint8_t hash[32];
         std::string error;
         if (!context.hash(reinterpret_cast<const uint8_t*>(kInput), sizeof(kInput),
-                          reinterpret_cast<const uint8_t*>(kKey), sizeof(kKey), hash, error))
+                          reinterpret_cast<const uint8_t*>(kKey), sizeof(kKey), hash, error)) {
             return false;
-        if (std::memcmp(hash, kExpected, sizeof(hash)) != 0)
+        }
+        if (std::memcmp(hash, kExpected, sizeof(hash)) != 0) {
             return false;
+        }
 
         uint8_t pairA[32];
         uint8_t pairB[32];
         if (!context.hashPair(reinterpret_cast<const uint8_t*>(kInput), sizeof(kInput),
                                reinterpret_cast<const uint8_t*>(kInput), sizeof(kInput),
-                               reinterpret_cast<const uint8_t*>(kKey), sizeof(kKey), pairA, pairB, error))
+                               reinterpret_cast<const uint8_t*>(kKey), sizeof(kKey), pairA, pairB, error)) {
             return false;
+        }
         if (std::memcmp(pairA, kExpected, sizeof(pairA)) != 0 ||
-            std::memcmp(pairB, kExpected, sizeof(pairB)) != 0)
+            std::memcmp(pairB, kExpected, sizeof(pairB)) != 0) {
             return false;
+        }
 
         std::vector<uint8_t> blob(43, 0);
         std::array<uint8_t, 32> seed{};
@@ -444,8 +481,9 @@ bool randomXSelfTest()
         uint32_t nonce = 7;
         std::atomic<bool> restart{false};
         uint64_t done = 0;
-        if (!scanHashRandomX(context, blob, 39, seed, target, nonce, nonce, restart, done, result, error))
+        if (!scanHashRandomX(context, blob, 39, seed, target, nonce, nonce, restart, done, result, error)) {
             return false;
+        }
         return nonce == 7 && done == 1;
     } catch (const std::exception&) {
         return false;

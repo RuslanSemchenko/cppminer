@@ -124,25 +124,30 @@ add_library(randomx STATIC
 )
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64|i[3-6]86)$")
+    set(RANDOMX_ASM_OBJ "${CMAKE_CURRENT_BINARY_DIR}/jit_compiler_x86_static.o")
+    add_custom_command(
+        OUTPUT "${RANDOMX_ASM_OBJ}"
+        COMMAND ${CMAKE_C_COMPILER} -I${CMAKE_CURRENT_SOURCE_DIR}/src/algo/randomx -I${CMAKE_CURRENT_SOURCE_DIR}/src/simd/randomx -fPIC -c ${CMAKE_CURRENT_SOURCE_DIR}/src/simd/randomx/jit_compiler_x86_static.S -o ${RANDOMX_ASM_OBJ}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/simd/randomx/jit_compiler_x86_static.S
+        COMMENT "Assembling jit_compiler_x86_static.S"
+        VERBATIM
+    )
     target_sources(randomx PRIVATE
         src/simd/randomx/jit_compiler_x86.cpp
-        src/simd/randomx/jit_compiler_x86_static.S
-    )
-    set_source_files_properties(
-        src/simd/randomx/jit_compiler_x86_static.S
-        PROPERTIES LANGUAGE ASM
+        "${RANDOMX_ASM_OBJ}"
     )
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+    set(RANDOMX_ASM_OBJ "${CMAKE_CURRENT_BINARY_DIR}/jit_compiler_a64_static.o")
+    add_custom_command(
+        OUTPUT "${RANDOMX_ASM_OBJ}"
+        COMMAND ${CMAKE_C_COMPILER} -I${CMAKE_CURRENT_SOURCE_DIR}/src/algo/randomx -I${CMAKE_CURRENT_SOURCE_DIR}/src/simd/randomx -fPIC -c ${CMAKE_CURRENT_SOURCE_DIR}/src/algo/randomx/jit_compiler_a64_static.S -o ${RANDOMX_ASM_OBJ}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/algo/randomx/jit_compiler_a64_static.S
+        COMMENT "Assembling jit_compiler_a64_static.S"
+        VERBATIM
+    )
     target_sources(randomx PRIVATE
         src/algo/randomx/jit_compiler_a64.cpp
-        src/algo/randomx/jit_compiler_a64_static.S
-    )
-    # Keep preprocessed AArch64 assembly in ASM mode. Clang handles the .S
-    # preprocessing pass itself; forcing C mode treats assembler comments as
-    # invalid C preprocessor directives on macOS.
-    set_source_files_properties(
-        src/algo/randomx/jit_compiler_a64_static.S
-        PROPERTIES LANGUAGE ASM
+        "${RANDOMX_ASM_OBJ}"
     )
 endif()
 

@@ -36,7 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 		#define cpuid(info, x) __cpuidex(info, x, 0)
 	#else //GCC
 		#include <cpuid.h>
-		void cpuid(int info[4], int InfoType) {
+		static void cpuid(int info[4], int InfoType) {
 			__cpuid_count(InfoType, 0, info[0], info[1], info[2], info[3]);
 		}
 	#endif
@@ -63,7 +63,7 @@ void hashAes1Rx4_zvkned(const void *input, size_t inputSize, void *hash);
 
 namespace randomx {
 
-	Cpu::Cpu()
+	Cpu::Cpu() noexcept
 	{
 #ifdef HAVE_CPUID
 		int info[4];

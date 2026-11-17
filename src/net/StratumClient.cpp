@@ -39,16 +39,21 @@ void buildClassicHeader(uint8_t header[80], const std::vector<uint8_t>& wireVers
                          const std::vector<uint8_t>& wirePrevhash, const std::array<uint8_t, 32>& merkleRoot,
                          const std::vector<uint8_t>& wireNtime, const std::vector<uint8_t>& wireNbits)
 {
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 4; i++) {
         header[i] = wireVersion[3 - i];
-    for (int c = 0; c < 8; c++)
-        for (int i = 0; i < 4; i++)
+    }
+    for (int c = 0; c < 8; c++) {
+        for (int i = 0; i < 4; i++) {
             header[4 + 4 * c + i] = wirePrevhash[4 * c + (3 - i)];
+        }
+    }
     std::memcpy(header + 36, merkleRoot.data(), 32);
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 4; i++) {
         header[68 + i] = wireNtime[3 - i];
-    for (int i = 0; i < 4; i++)
+    }
+    for (int i = 0; i < 4; i++) {
         header[72 + i] = wireNbits[3 - i];
+    }
 }
 
 } // namespace
@@ -73,8 +78,9 @@ void StratumClient::stop()
 {
     stopRequested_ = true;
     running_ = false;
-    if (thread_.joinable())
+    if (thread_.joinable()) {
         thread_.join();
+    }
     socket_.disconnect();
 }
 
@@ -87,8 +93,9 @@ bool StratumClient::hasWork() const
 uint64_t StratumClient::snapshotWork(ClassicWork& out) const
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (!haveJob_)
+    if (!haveJob_) {
         return 0;
+    }
     out = currentWork_;
     return currentWork_.jobVersion;
 }
@@ -96,15 +103,17 @@ uint64_t StratumClient::snapshotWork(ClassicWork& out) const
 bool StratumClient::rollExtranonce2(uint64_t expectedVersion)
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (!haveJob_ || currentWork_.jobVersion != expectedVersion || extranonce2_.empty())
+    if (!haveJob_ || currentWork_.jobVersion != expectedVersion || extranonce2_.empty()) {
         return false;
+    }
 
     // Treat extranonce2 as a big-endian byte string for deterministic
     // rollover. Carrying from the least-significant byte preserves every
     // value in the pool-advertised fixed-width namespace.
     for (auto it = extranonce2_.rbegin(); it != extranonce2_.rend(); ++it) {
-        if (++(*it) != 0)
+        if (++(*it) != 0) {
             break;
+        }
     }
     buildWorkLocked();
     return true;
@@ -113,8 +122,9 @@ bool StratumClient::rollExtranonce2(uint64_t expectedVersion)
 bool StratumClient::sendJson(const nlohmann::json& msg)
 {
     std::string body = msg.dump();
-    if (config_.protocolDump)
+    if (config_.protocolDump) {
         logf(LogLevel::Debug, "stratum -> %s", body.c_str());
+    }
     body += "\n";
     std::lock_guard<std::mutex> lock(sendMutex_);
     return socket_.sendAll(body.c_str(), body.size());
@@ -140,8 +150,9 @@ void StratumClient::submitShare(const ClassicWork& work, uint32_t nonce)
          })},
     };
 
-    if (!sendJson(req))
+    if (!sendJson(req)) {
         logf(LogLevel::Error, "failed to submit share: connection error");
+    }
 }
 
 void StratumClient::buildWorkLocked()
@@ -227,16 +238,20 @@ void StratumClient::handleNotify(const nlohmann::json& p)
             nbits_ = std::move(nbits);
             ntime_ = std::move(ntime);
 
-            if (newJob || extranonce2_.size() != extranonce2Size_)
+            if (newJob || extranonce2_.size() != extranonce2Size_) {
                 extranonce2_.assign(extranonce2Size_, 0);
+            }
 
             buildWorkLocked();
         }
 
         logf(LogLevel::Debug, "new job %s (clean=%d)", jobId.c_str(), clean ? 1 : 0);
         if (clean) {
-            for (auto* f : restartFlags_)
-                if (f) f->store(true, std::memory_order_relaxed);
+            for (auto* f : restartFlags_) {
+                if (f) {
+                    f->store(true, std::memory_order_relaxed);
+                }
+            }
         }
     } catch (const std::exception& e) {
         logf(LogLevel::Warning, "malformed mining.notify (%s), ignoring", e.what());
@@ -245,11 +260,13 @@ void StratumClient::handleNotify(const nlohmann::json& p)
 
 void StratumClient::handleSetDifficulty(const nlohmann::json& p)
 {
-    if (!p.is_array() || p.empty() || !p[0].is_number())
+    if (!p.is_array() || p.empty() || !p[0].is_number()) {
         return;
+    }
     double d = p[0].get<double>();
-    if (d <= 0.0)
+    if (d <= 0.0) {
         return;
+    }
     std::lock_guard<std::mutex> lock(mutex_);
     nextDiff_ = d;
 }
@@ -260,7 +277,7 @@ void StratumClient::onShareResult(bool accepted, const std::string& reason)
         accepted_++;
         logf(LogLevel::Info, "share accepted (%llu/%llu)",
              static_cast<unsigned long long>(accepted_.load()),
-             static_cast<unsigned long long>(accepted_.load() + rejected_.load()));
+             static_cast<unsigned long long>(accepted_.load()) + static_cast<unsigned long long>(rejected_.load()));
     } else {
         rejected_++;
         logf(LogLevel::Warning, "share rejected%s%s", reason.empty() ? "" : ": ", reason.c_str());
@@ -269,20 +286,24 @@ void StratumClient::onShareResult(bool accepted, const std::string& reason)
 
 void StratumClient::handleResponse(const nlohmann::json& msg)
 {
-    if (!msg.contains("id") || msg["id"].is_null() || !msg["id"].is_number_integer())
+    if (!msg.contains("id") || msg["id"].is_null() || !msg["id"].is_number_integer()) {
         return;
+    }
     int id = msg["id"].get<int>();
 
     bool hasError = msg.contains("error") && !msg["error"].is_null();
     std::string errMsg;
     if (hasError) {
         const auto& e = msg["error"];
-        if (e.is_array() && e.size() > 1 && e[1].is_string())
+        if (e.is_array() && e.size() > 1 && e[1].is_string()) {
             errMsg = e[1].get<std::string>();
-        else if (e.is_object() && e.contains("message") && e["message"].is_string())
+        }
+        else if (e.is_object() && e.contains("message") && e["message"].is_string()) {
             errMsg = e["message"].get<std::string>();
-        else
+        }
+        else {
             errMsg = e.dump();
+        }
     }
 
     if (id == 1) { // mining.subscribe
@@ -317,8 +338,9 @@ void StratumClient::handleResponse(const nlohmann::json& msg)
 
 void StratumClient::handleLine(const std::string& line)
 {
-    if (config_.protocolDump)
+    if (config_.protocolDump) {
         logf(LogLevel::Debug, "stratum <- %s", line.c_str());
+    }
 
     nlohmann::json msg;
     try {
@@ -327,8 +349,9 @@ void StratumClient::handleLine(const std::string& line)
         logf(LogLevel::Debug, "ignoring non-JSON stratum line");
         return;
     }
-    if (!msg.is_object())
+    if (!msg.is_object()) {
         return;
+    }
 
     if (msg.contains("method") && msg["method"].is_string()) {
         std::string method = msg["method"].get<std::string>();
@@ -342,15 +365,17 @@ void StratumClient::handleLine(const std::string& line)
             logf(LogLevel::Notice, "pool requested a reconnect");
             socket_.disconnect();
         } else if (method == "client.get_version") {
-            if (msg.contains("id") && !msg["id"].is_null())
+            if (msg.contains("id") && !msg["id"].is_null()) {
                 sendJson({{"id", msg["id"]}, {"result", kUserAgent}, {"error", nullptr}});
+            }
         } else if (method == "client.show_message") {
             std::string text = (params.is_array() && !params.empty() && params[0].is_string())
                                     ? params[0].get<std::string>()
                                     : std::string();
             logf(LogLevel::Notice, "pool message: %s", text.c_str());
-            if (msg.contains("id") && !msg["id"].is_null())
+            if (msg.contains("id") && !msg["id"].is_null()) {
                 sendJson({{"id", msg["id"]}, {"result", true}, {"error", nullptr}});
+            }
         }
         return;
     }
@@ -360,25 +385,30 @@ void StratumClient::handleLine(const std::string& line)
 
 bool StratumClient::pumpSocket(int waitMs)
 {
-    if (!socket_.waitReadable(waitMs))
+    if (!socket_.waitReadable(waitMs)) {
         return true; // just a timeout, connection still fine
+    }
 
     char buf[4096];
     int n = socket_.recvSome(buf, sizeof(buf));
-    if (n < 0)
+    if (n < 0) {
         return false;
-    if (n == 0)
+    }
+    if (n == 0) {
         return true;
+    }
 
     recvBuffer_.append(buf, static_cast<size_t>(n));
-    size_t pos;
+    size_t pos = 0;
     while ((pos = recvBuffer_.find('\n')) != std::string::npos) {
         std::string line = recvBuffer_.substr(0, pos);
         recvBuffer_.erase(0, pos + 1);
-        if (!line.empty() && line.back() == '\r')
+        if (!line.empty() && line.back() == '\r') {
             line.pop_back();
-        if (!line.empty())
+        }
+        if (!line.empty()) {
             handleLine(line);
+        }
     }
     return true;
 }
@@ -409,8 +439,9 @@ bool StratumClient::connectAndHandshake(std::string& error)
         return false;
     }
 
-    if (!socket_.connect(url, 30, error, config_.tls))
+    if (!socket_.connect(url, 30, error, config_.tls)) {
         return false;
+    }
 
     recvBuffer_.clear();
     {
@@ -481,16 +512,21 @@ void StratumClient::threadMain()
         attempt = 0;
         running_ = true;
         logf(LogLevel::Notice, "connected to %s, authorized as %s", config_.url.c_str(), config_.user.c_str());
-        for (auto* f : restartFlags_)
-            if (f) f->store(true, std::memory_order_relaxed);
+        for (auto* f : restartFlags_) {
+            if (f) {
+                f->store(true, std::memory_order_relaxed);
+            }
+        }
 
         bool alive = true;
-        while (alive && !stopRequested_.load())
+        while (alive && !stopRequested_.load()) {
             alive = pumpSocket(1000);
+        }
 
         running_ = false;
-        if (!stopRequested_.load())
+        if (!stopRequested_.load()) {
             logf(LogLevel::Warning, "disconnected from pool, reconnecting...");
+        }
         socket_.disconnect();
         {
             std::lock_guard<std::mutex> lock(mutex_);

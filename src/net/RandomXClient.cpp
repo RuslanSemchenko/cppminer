@@ -38,8 +38,9 @@ void RandomXClient::stop()
     stopRequested_ = true;
     running_ = false;
     socket_.disconnect();
-    if (thread_.joinable())
+    if (thread_.joinable()) {
         thread_.join();
+    }
 }
 
 bool RandomXClient::hasWork() const
@@ -51,8 +52,9 @@ bool RandomXClient::hasWork() const
 uint64_t RandomXClient::snapshotWork(RandomXWork& out) const
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (!haveJob_)
+    if (!haveJob_) {
         return 0;
+    }
     out = currentWork_;
     return currentWork_.jobVersion;
 }
@@ -60,8 +62,9 @@ uint64_t RandomXClient::snapshotWork(RandomXWork& out) const
 bool RandomXClient::sendJson(const nlohmann::json& msg)
 {
     std::string body = msg.dump();
-    if (config_.protocolDump)
+    if (config_.protocolDump) {
         logf(LogLevel::Debug, "randomx -> %s", body.c_str());
+    }
     body += '\n';
     std::lock_guard<std::mutex> lock(sendMutex_);
     return socket_.sendAll(body.c_str(), body.size());
@@ -81,8 +84,9 @@ void RandomXClient::submitShare(const RandomXWork& work, uint32_t nonce, const u
              {"result", util::bin2hex(resultHash, 32)},
          }},
     };
-    if (!sendJson(req))
+    if (!sendJson(req)) {
         logf(LogLevel::Error, "failed to submit RandomX share: connection error");
+    }
 }
 
 void RandomXClient::handleJob(const nlohmann::json& params)
@@ -101,8 +105,11 @@ void RandomXClient::handleJob(const nlohmann::json& params)
         currentWork_ = std::move(work);
         haveJob_ = true;
     }
-    for (auto* f : restartFlags_)
-        if (f) f->store(true, std::memory_order_relaxed);
+    for (auto* f : restartFlags_) {
+        if (f) {
+            f->store(true, std::memory_order_relaxed);
+        }
+    }
     logf(LogLevel::Debug, "new RandomX job %s", jobId.c_str());
 }
 
@@ -112,7 +119,7 @@ void RandomXClient::onShareResult(bool accepted, const std::string& reason)
         accepted_++;
         logf(LogLevel::Info, "share accepted (%llu/%llu)",
              static_cast<unsigned long long>(accepted_.load()),
-             static_cast<unsigned long long>(accepted_.load() + rejected_.load()));
+             static_cast<unsigned long long>(accepted_.load()) + static_cast<unsigned long long>(rejected_.load()));
     } else {
         rejected_++;
         logf(LogLevel::Warning, "share rejected%s%s", reason.empty() ? "" : ": ", reason.c_str());
@@ -121,25 +128,30 @@ void RandomXClient::onShareResult(bool accepted, const std::string& reason)
 
 void RandomXClient::handleResponse(const nlohmann::json& msg)
 {
-    if (!msg.contains("id") || msg["id"].is_null() || !msg["id"].is_number_integer())
+    if (!msg.contains("id") || msg["id"].is_null() || !msg["id"].is_number_integer()) {
         return;
+    }
     const int id = msg["id"].get<int>();
     const bool hasError = msg.contains("error") && !msg["error"].is_null();
     std::string errMsg;
     if (hasError) {
         const auto& e = msg["error"];
-        if (e.is_array() && e.size() > 1 && e[1].is_string())
+        if (e.is_array() && e.size() > 1 && e[1].is_string()) {
             errMsg = e[1].get<std::string>();
-        else if (e.is_object() && e.contains("message") && e["message"].is_string())
+        }
+        else if (e.is_object() && e.contains("message") && e["message"].is_string()) {
             errMsg = e["message"].get<std::string>();
-        else
+        }
+        else {
             errMsg = e.dump();
+        }
     }
 
     if (id == 1) {
         bool ok = !hasError && msg.contains("result") && msg["result"].is_object();
-        if (ok && msg["result"].contains("job"))
+        if (ok && msg["result"].contains("job")) {
             handleJob(msg["result"]["job"]);
+        }
         lastResponseOk_ = ok;
         lastResponseError_ = ok ? std::string() : (hasError ? errMsg : "malformed login response");
         lastHandledResponseId_ = 1;
@@ -153,8 +165,9 @@ void RandomXClient::handleResponse(const nlohmann::json& msg)
 
 void RandomXClient::handleLine(const std::string& line)
 {
-    if (config_.protocolDump)
+    if (config_.protocolDump) {
         logf(LogLevel::Debug, "randomx <- %s", line.c_str());
+    }
     nlohmann::json msg;
     try {
         msg = nlohmann::json::parse(line);
@@ -162,8 +175,9 @@ void RandomXClient::handleLine(const std::string& line)
         logf(LogLevel::Debug, "ignoring non-JSON RandomX line");
         return;
     }
-    if (!msg.is_object())
+    if (!msg.is_object()) {
         return;
+    }
 
     if (msg.contains("method") && msg["method"].is_string()) {
         const std::string method = msg["method"].get<std::string>();
@@ -173,8 +187,9 @@ void RandomXClient::handleLine(const std::string& line)
             sendJson({{"id", msg["id"]}, {"result", kUserAgent}, {"error", nullptr}});
         } else if (method == "client.show_message") {
             const auto& p = msg.contains("params") ? msg["params"] : nlohmann::json();
-            if (p.is_object() && p.contains("message") && p["message"].is_string())
+            if (p.is_object() && p.contains("message") && p["message"].is_string()) {
                 logf(LogLevel::Notice, "pool message: %s", p["message"].get<std::string>().c_str());
+            }
         }
         return;
     }
@@ -183,23 +198,28 @@ void RandomXClient::handleLine(const std::string& line)
 
 bool RandomXClient::pumpSocket(int waitMs)
 {
-    if (!socket_.waitReadable(waitMs))
+    if (!socket_.waitReadable(waitMs)) {
         return true;
+    }
     char buf[8192];
     const int n = socket_.recvSome(buf, sizeof(buf));
-    if (n < 0)
+    if (n < 0) {
         return false;
-    if (n == 0)
+    }
+    if (n == 0) {
         return true;
+    }
     recvBuffer_.append(buf, static_cast<size_t>(n));
-    size_t pos;
+    size_t pos = 0;
     while ((pos = recvBuffer_.find('\n')) != std::string::npos) {
         std::string line = recvBuffer_.substr(0, pos);
         recvBuffer_.erase(0, pos + 1);
-        if (!line.empty() && line.back() == '\r')
+        if (!line.empty() && line.back() == '\r') {
             line.pop_back();
-        if (!line.empty())
+        }
+        if (!line.empty()) {
             handleLine(line);
+        }
     }
     return true;
 }
@@ -229,8 +249,9 @@ bool RandomXClient::connectAndHandshake(std::string& error)
         error = "unsupported URL scheme in '" + config_.url + "'";
         return false;
     }
-    if (!socket_.connect(url, 30, error, config_.tls))
+    if (!socket_.connect(url, 30, error, config_.tls)) {
         return false;
+    }
 
     recvBuffer_.clear();
     {
@@ -287,15 +308,20 @@ void RandomXClient::threadMain()
         attempt = 0;
         running_ = true;
         logf(LogLevel::Notice, "connected to RandomX pool %s, authorized as %s", config_.url.c_str(), config_.user.c_str());
-        for (auto* f : restartFlags_)
-            if (f) f->store(true, std::memory_order_relaxed);
+        for (auto* f : restartFlags_) {
+            if (f) {
+                f->store(true, std::memory_order_relaxed);
+            }
+        }
 
         bool alive = true;
-        while (alive && !stopRequested_.load())
+        while (alive && !stopRequested_.load()) {
             alive = pumpSocket(1000);
+        }
         running_ = false;
-        if (!stopRequested_.load())
+        if (!stopRequested_.load()) {
             logf(LogLevel::Warning, "disconnected from RandomX pool, reconnecting...");
+        }
         socket_.disconnect();
         std::lock_guard<std::mutex> lock(mutex_);
         haveJob_ = false;

@@ -291,7 +291,7 @@ int randomx_argon2_validate_inputs(const argon2_context *context) {
 	return ARGON2_OK;
 }
 
-void rxa2_fill_first_blocks(uint8_t *blockhash, const argon2_instance_t *instance) {
+static void rxa2_fill_first_blocks(uint8_t *blockhash, const argon2_instance_t *instance) {
 	uint32_t l;
 	/* Make the first and second block in each lane as G(H0||0||i) or
 	   G(H0||1||i) */
@@ -313,7 +313,7 @@ void rxa2_fill_first_blocks(uint8_t *blockhash, const argon2_instance_t *instanc
 	}
 }
 
-void rxa2_initial_hash(uint8_t *blockhash, argon2_context *context, argon2_type type) {
+static void rxa2_initial_hash(uint8_t *blockhash, argon2_context *context, argon2_type type) {
 	blake2b_state BlakeHash;
 	uint8_t value[sizeof(uint32_t)];
 

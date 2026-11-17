@@ -35,10 +35,12 @@ void sha256Transform8way(uint32_t state[8 * 8], const uint32_t blocks[8 * 16])
 {
     constexpr int N = 8;
     V w[64];
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 16; i++) {
         w[i] = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(blocks + i * N));
-    for (int i = 16; i < 64; i++)
+    }
+    for (int i = 16; i < 64; i++) {
         w[i] = add(add(smallS1(w[i - 2]), w[i - 7]), add(smallS0(w[i - 15]), w[i - 16]));
+    }
 
     V a = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(state + 0 * N));
     V b = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(state + 1 * N));

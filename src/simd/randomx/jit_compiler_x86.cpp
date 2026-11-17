@@ -146,28 +146,30 @@ namespace randomx {
 #define ADDR(x) ((uint8_t*)&x)
 #endif
 
-	const uint8_t* codePrologue = ADDR(randomx_program_prologue);
-	const uint8_t* codeLoopBegin = ADDR(randomx_program_loop_begin);
-	const uint8_t* codeLoopLoad = ADDR(randomx_program_loop_load);
-	const uint8_t* codeProgamStart = ADDR(randomx_program_start);
-	const uint8_t* codeReadDataset = ADDR(randomx_program_read_dataset);
-	const uint8_t* codeReadDatasetV2 = ADDR(randomx_program_read_dataset_v2);
-	const uint8_t* codeReadDatasetLightSshInit = ADDR(randomx_program_read_dataset_sshash_init);
-	const uint8_t* codeReadDatasetLightSshInitV2 = ADDR(randomx_program_read_dataset_sshash_init_v2);
-	const uint8_t* codeReadDatasetLightSshFin = ADDR(randomx_program_read_dataset_sshash_fin);
-	const uint8_t* codeDatasetInit = ADDR(randomx_dataset_init);
-	const uint8_t* codeLoopStore = ADDR(randomx_program_loop_store);
-	const uint8_t* codeLoopStoreHardAes = ADDR(randomx_program_loop_store_hard_aes);
-	const uint8_t* codeLoopStoreSoftAes = ADDR(randomx_program_loop_store_soft_aes);
-	const uint8_t* codeLoopEnd = ADDR(randomx_program_loop_end);
-	const uint8_t* codeSoftAes = ADDR(randomx_program_soft_aes);
-	const uint8_t* codeSoftAesEnd = ADDR(randomx_program_soft_aes_end);
-	const uint8_t* codeEpilogue = ADDR(randomx_program_epilogue);
-	const uint8_t* codeProgramEnd = ADDR(randomx_program_end);
-	const uint8_t* codeShhLoad = ADDR(randomx_sshash_load);
-	const uint8_t* codeShhPrefetch = ADDR(randomx_sshash_prefetch);
-	const uint8_t* codeShhEnd = ADDR(randomx_sshash_end);
-	const uint8_t* codeShhInit = ADDR(randomx_sshash_init);
+	namespace {
+		const uint8_t* const codePrologue = ADDR(randomx_program_prologue);
+		const uint8_t* const codeLoopBegin = ADDR(randomx_program_loop_begin);
+		const uint8_t* const codeLoopLoad = ADDR(randomx_program_loop_load);
+		const uint8_t* const codeProgamStart = ADDR(randomx_program_start);
+		const uint8_t* const codeReadDataset = ADDR(randomx_program_read_dataset);
+		const uint8_t* const codeReadDatasetV2 = ADDR(randomx_program_read_dataset_v2);
+		const uint8_t* const codeReadDatasetLightSshInit = ADDR(randomx_program_read_dataset_sshash_init);
+		const uint8_t* const codeReadDatasetLightSshInitV2 = ADDR(randomx_program_read_dataset_sshash_init_v2);
+		const uint8_t* const codeReadDatasetLightSshFin = ADDR(randomx_program_read_dataset_sshash_fin);
+		const uint8_t* const codeDatasetInit = ADDR(randomx_dataset_init);
+		const uint8_t* const codeLoopStore = ADDR(randomx_program_loop_store);
+		const uint8_t* const codeLoopStoreHardAes = ADDR(randomx_program_loop_store_hard_aes);
+		const uint8_t* const codeLoopStoreSoftAes = ADDR(randomx_program_loop_store_soft_aes);
+		const uint8_t* const codeLoopEnd = ADDR(randomx_program_loop_end);
+		const uint8_t* const codeSoftAes = ADDR(randomx_program_soft_aes);
+		const uint8_t* const codeSoftAesEnd = ADDR(randomx_program_soft_aes_end);
+		const uint8_t* const codeEpilogue = ADDR(randomx_program_epilogue);
+		const uint8_t* const codeProgramEnd = ADDR(randomx_program_end);
+		const uint8_t* const codeShhLoad = ADDR(randomx_sshash_load);
+		const uint8_t* const codeShhPrefetch = ADDR(randomx_sshash_prefetch);
+		const uint8_t* const codeShhEnd = ADDR(randomx_sshash_end);
+		const uint8_t* const codeShhInit = ADDR(randomx_sshash_init);
+	}
 
 	const int32_t prologueSize = codeLoopBegin - codePrologue;
 	const int32_t loopLoadSize = codeProgamStart - codeLoopLoad;
@@ -372,7 +374,7 @@ namespace randomx {
 		emitByte(0xc0 + pcfg.readReg0);
 		emit(REX_XOR_RAX_R64);
 		emitByte(0xc0 + pcfg.readReg1);
-		emit(ADDR(randomx_prefetch_scratchpad), ADDR(randomx_prefetch_scratchpad_end) - ADDR(randomx_prefetch_scratchpad));
+		emit(ADDR(randomx_prefetch_scratchpad), reinterpret_cast<uintptr_t>(ADDR(randomx_prefetch_scratchpad_end)) - reinterpret_cast<uintptr_t>(ADDR(randomx_prefetch_scratchpad)));
 		if (vmFlags & RANDOMX_FLAG_V2) {
 			if (vmFlags & RANDOMX_FLAG_HARD_AES) {
 				memcpy(code + codePos, codeLoopStoreHardAes, loopStoreHardAesSize);

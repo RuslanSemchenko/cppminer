@@ -23,10 +23,12 @@ inline uint32_t smallS1(uint32_t x) { return rotr(x, 17) ^ rotr(x, 19) ^ (x >> 1
 void sha256TransformScalar(uint32_t state[8], const uint8_t block[64])
 {
     uint32_t w[64];
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 16; i++) {
         w[i] = util::be32dec(block + 4 * i);
-    for (int i = 16; i < 64; i++)
+    }
+    for (int i = 16; i < 64; i++) {
         w[i] = smallS1(w[i - 2]) + w[i - 7] + smallS0(w[i - 15]) + w[i - 16];
+    }
 
     uint32_t a = state[0], b = state[1], c = state[2], d = state[3];
     uint32_t e = state[4], f = state[5], g = state[6], h = state[7];

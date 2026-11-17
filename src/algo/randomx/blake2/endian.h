@@ -28,7 +28,7 @@
 
 static FORCE_INLINE uint32_t load32(const void *src) {
 #if defined(NATIVE_LITTLE_ENDIAN)
-	uint32_t w;
+	uint32_t w = 0;
 	memcpy(&w, src, sizeof w);
 	return w;
 #else
@@ -42,7 +42,7 @@ static FORCE_INLINE uint32_t load32(const void *src) {
 }
 
 static FORCE_INLINE uint64_t load64_native(const void *src) {
-	uint64_t w;
+	uint64_t w = 0;
 	memcpy(&w, src, sizeof w);
 	return w;
 }

@@ -60,8 +60,9 @@ inline void lyraReduced(std::array<__m256i, 16>& v)
 
 inline void lyraFull(std::array<__m256i, 16>& v)
 {
-    for (int i = 0; i < 12; ++i)
+    for (int i = 0; i < 12; ++i) {
         lyraRound(v);
+    }
 }
 
 inline __m256i loadMatrix(const std::vector<uint64_t>& matrix, size_t row, size_t word)
@@ -87,16 +88,18 @@ inline void storeOutput(const std::array<__m256i, 16>& state, uint8_t out[kLanes
     alignas(32) uint64_t lanes[kLanes];
     for (size_t word = 0; word < 4; ++word) {
         _mm256_store_si256(reinterpret_cast<__m256i*>(lanes), state[word]);
-        for (size_t lane = 0; lane < kLanes; ++lane)
+        for (size_t lane = 0; lane < kLanes; ++lane) {
             std::memcpy(out[lane] + word * sizeof(uint64_t), &lanes[lane], sizeof(uint64_t));
+        }
     }
 }
 
 inline void absorbSafe(std::array<__m256i, 16>& state, const std::vector<uint64_t>& input, size_t blocks)
 {
     for (size_t block = 0; block < blocks; ++block) {
-        for (size_t word = 0; word < kInputBlockWords; ++word)
+        for (size_t word = 0; word < kInputBlockWords; ++word) {
             state[word] = _mm256_xor_si256(state[word], loadInput(input, block, word));
+        }
         lyraFull(state);
     }
 }
@@ -105,8 +108,9 @@ inline void squeezeRow0(std::array<__m256i, 16>& state, std::vector<uint64_t>& m
 {
     for (size_t col = 0; col < kCols; ++col) {
         const size_t outCol = kCols - 1 - col;
-        for (size_t word = 0; word < kBlockWords; ++word)
+        for (size_t word = 0; word < kBlockWords; ++word) {
             storeMatrix(matrix, 0, outCol * kBlockWords + word, state[word]);
+        }
         lyraReduced(state);
     }
 }
@@ -114,8 +118,9 @@ inline void squeezeRow0(std::array<__m256i, 16>& state, std::vector<uint64_t>& m
 inline void duplexRow1(std::array<__m256i, 16>& state, std::vector<uint64_t>& matrix)
 {
     for (size_t col = 0; col < kCols; ++col) {
-        for (size_t word = 0; word < kBlockWords; ++word)
+        for (size_t word = 0; word < kBlockWords; ++word) {
             state[word] = _mm256_xor_si256(state[word], loadMatrix(matrix, 0, col * kBlockWords + word));
+        }
         lyraReduced(state);
         const size_t outCol = kCols - 1 - col;
         for (size_t word = 0; word < kBlockWords; ++word) {
@@ -165,8 +170,9 @@ inline void duplexWandering(std::array<__m256i, 16>& state, std::vector<uint64_t
         lyraReduced(state);
 
         bool hasOverlap = false;
-        for (size_t lane = 0; lane < kLanes; ++lane)
+        for (size_t lane = 0; lane < kLanes; ++lane) {
             hasOverlap = hasOverlap || rowa[lane] == row;
+        }
 
         if (!hasOverlap) {
             alignas(32) uint64_t ioLanes[kLanes];
@@ -178,8 +184,9 @@ inline void duplexWandering(std::array<__m256i, 16>& state, std::vector<uint64_t
 
                 const __m256i updatedIo = _mm256_xor_si256(inout[word], rotated);
                 _mm256_store_si256(reinterpret_cast<__m256i*>(ioLanes), updatedIo);
-                for (size_t lane = 0; lane < kLanes; ++lane)
+                for (size_t lane = 0; lane < kLanes; ++lane) {
                     matrix[(rowa[lane] * kRowWords + col * kBlockWords + word) * kLanes + lane] = ioLanes[lane];
+                }
             }
         } else {
             alignas(32) uint64_t stateLanes[kBlockWords][kLanes];
@@ -194,8 +201,9 @@ inline void duplexWandering(std::array<__m256i, 16>& state, std::vector<uint64_t
                     const size_t ioBase = (rowa[lane] * kRowWords + col * kBlockWords + word) * kLanes + lane;
                     const uint64_t rotated = word == 0 ? stateLanes[11][lane] : stateLanes[word - 1][lane];
                     const uint64_t ioValue = inoutLanes[word][lane] ^ rotated;
-                    if (rowa[lane] == row)
+                    if (rowa[lane] == row) {
                         matrix[outBase + lane] = matrix[outBase + lane] ^ stateLanes[word][lane] ^ rotated;
+                    }
                     else {
                         matrix[outBase + lane] = matrix[outBase + lane] ^ stateLanes[word][lane];
                         matrix[ioBase] = ioValue;
@@ -264,7 +272,7 @@ void lyra2Avx2Hash4(Lyra2Avx2Context& ctx, const uint8_t* blob, size_t blobSize,
     for (size_t block = 0; block < blockCount; ++block) {
         for (size_t word = 0; word < kInputBlockWords; ++word) {
             for (size_t lane = 0; lane < kLanes; ++lane) {
-                uint64_t value;
+                uint64_t value = 0;
                 std::memcpy(&value, padded + lane * paddedSize + block * kInputBlockBytes + word * sizeof(uint64_t), sizeof(value));
                 ctx.input[(block * kInputBlockWords + word) * kLanes + lane] = value;
             }
@@ -273,16 +281,18 @@ void lyra2Avx2Hash4(Lyra2Avx2Context& ctx, const uint8_t* blob, size_t blobSize,
 
     std::fill(ctx.matrix.begin(), ctx.matrix.end(), 0);
     std::array<__m256i, 16> state;
-    for (size_t word = 0; word < 8; ++word)
+    for (size_t word = 0; word < 8; ++word) {
         state[word] = _mm256_setzero_si256();
+    }
     const uint64_t iv[8] = {
         0x6a09e667f3bcc908ULL, 0xbb67ae8584caa73bULL,
         0x3c6ef372fe94f82bULL, 0xa54ff53a5f1d36f1ULL,
         0x510e527fade682d1ULL, 0x9b05688c2b3e6c1fULL,
         0x1f83d9abfb41bd6bULL, 0x5be0cd19137e2179ULL,
     };
-    for (size_t word = 0; word < 8; ++word)
+    for (size_t word = 0; word < 8; ++word) {
         state[8 + word] = _mm256_set1_epi64x(static_cast<long long>(iv[word]));
+    }
 
     absorbSafe(state, ctx.input, blockCount);
     squeezeRow0(state, ctx.matrix);
@@ -312,8 +322,9 @@ void lyra2Avx2Hash4(Lyra2Avx2Context& ctx, const uint8_t* blob, size_t blobSize,
         do {
             alignas(32) uint64_t state0[kLanes];
             _mm256_store_si256(reinterpret_cast<__m256i*>(state0), state[0]);
-            for (size_t lane = 0; lane < kLanes; ++lane)
+            for (size_t lane = 0; lane < kLanes; ++lane) {
                 rowaLanes[lane] = static_cast<size_t>(state0[lane] & (kRows - 1));
+            }
             duplexWandering(state, ctx.matrix, prev, rowaLanes, row);
             prev = row;
             row = static_cast<size_t>((static_cast<int64_t>(row) + step) & static_cast<int64_t>(kRows - 1));

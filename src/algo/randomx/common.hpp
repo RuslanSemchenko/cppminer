@@ -47,7 +47,7 @@ namespace randomx {
 	static_assert((RANDOMX_DATASET_BASE_SIZE & (RANDOMX_DATASET_BASE_SIZE - 1)) == 0, "RANDOMX_DATASET_BASE_SIZE must be a power of 2.");
 	static_assert(RANDOMX_DATASET_BASE_SIZE <= 4294967296ULL, "RANDOMX_DATASET_BASE_SIZE must not exceed 4294967296.");
 	static_assert(RANDOMX_DATASET_EXTRA_SIZE % 64 == 0, "RANDOMX_DATASET_EXTRA_SIZE must be divisible by 64.");
-	static_assert((uint64_t)RANDOMX_DATASET_BASE_SIZE + RANDOMX_DATASET_EXTRA_SIZE <= 17179869184, "Dataset size must not exceed 16 GiB.");
+	static_assert(static_cast<uint64_t>(RANDOMX_DATASET_BASE_SIZE) + RANDOMX_DATASET_EXTRA_SIZE <= 17179869184, "Dataset size must not exceed 16 GiB.");
 	static_assert(RANDOMX_PROGRAM_SIZE_V1 > 0, "RANDOMX_PROGRAM_SIZE_V1 must be greater than 0");
 	static_assert(RANDOMX_PROGRAM_SIZE_V1 <= 32768, "RANDOMX_PROGRAM_SIZE_V1 must not exceed 32768");
 	static_assert(RANDOMX_PROGRAM_SIZE_V2 > 0, "RANDOMX_PROGRAM_SIZE_V2 must be greater than 0");
@@ -94,7 +94,7 @@ namespace randomx {
 
 	//Prevent some unsafe configurations.
 #ifndef RANDOMX_UNSAFE
-	static_assert((uint64_t)ArgonBlockSize * RANDOMX_CACHE_ACCESSES * RANDOMX_ARGON_MEMORY + 33554432 >= (uint64_t)RANDOMX_DATASET_BASE_SIZE + RANDOMX_DATASET_EXTRA_SIZE, "Unsafe configuration: Memory-time tradeoffs");
+	static_assert(static_cast<uint64_t>(ArgonBlockSize) * RANDOMX_CACHE_ACCESSES * RANDOMX_ARGON_MEMORY + 33554432 >= static_cast<uint64_t>(RANDOMX_DATASET_BASE_SIZE) + RANDOMX_DATASET_EXTRA_SIZE, "Unsafe configuration: Memory-time tradeoffs");
 	static_assert((128 + RANDOMX_PROGRAM_SIZE_V1 * RANDOMX_FREQ_ISTORE / 256) * (RANDOMX_PROGRAM_COUNT * RANDOMX_PROGRAM_ITERATIONS) >= RANDOMX_SCRATCHPAD_L3, "Unsafe configuration: Insufficient Scratchpad writes");
 	static_assert((128 + RANDOMX_PROGRAM_SIZE_V2 * RANDOMX_FREQ_ISTORE / 256)* (RANDOMX_PROGRAM_COUNT* RANDOMX_PROGRAM_ITERATIONS) >= RANDOMX_SCRATCHPAD_L3, "Unsafe configuration: Insufficient Scratchpad writes");
 	static_assert(RANDOMX_PROGRAM_COUNT > 1, "Unsafe configuration: Program filtering strategies");

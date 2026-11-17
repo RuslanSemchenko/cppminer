@@ -18,8 +18,9 @@ inline uint32_t rotl(uint32_t x, int n)
 void xorSalsa8(uint32_t B[16], const uint32_t Bx[16])
 {
     uint32_t x[16];
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 16; i++) {
         x[i] = (B[i] ^= Bx[i]);
+    }
 
     for (int r = 0; r < 8; r += 2) {
         x[4] ^= rotl(x[0] + x[12], 7);   x[9] ^= rotl(x[5] + x[1], 7);
@@ -41,8 +42,9 @@ void xorSalsa8(uint32_t B[16], const uint32_t Bx[16])
         x[10] ^= rotl(x[9] + x[8], 18);  x[15] ^= rotl(x[14] + x[13], 18);
     }
 
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 16; i++) {
         B[i] += x[i];
+    }
 }
 
 } // namespace
@@ -56,8 +58,9 @@ void scryptRomixScalar(uint32_t B[32], uint32_t* V, uint32_t costN)
     }
     for (uint32_t i = 0; i < costN; i++) {
         uint32_t j = 32 * (B[16] & (costN - 1));
-        for (int k = 0; k < 32; k++)
+        for (int k = 0; k < 32; k++) {
             B[k] ^= V[j + k];
+        }
         xorSalsa8(B + 0, B + 16);
         xorSalsa8(B + 16, B + 0);
     }

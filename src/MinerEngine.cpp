@@ -18,31 +18,38 @@ MinerEngine::MinerEngine(Config config) : config_(std::move(config))
 
 uint64_t MinerEngine::acceptedShares() const
 {
-    if (stratum_)
+    if (stratum_) {
         return stratum_->acceptedShares();
-    if (webchain_)
+    }
+    if (webchain_) {
         return webchain_->acceptedShares();
-    if (randomx_)
+    }
+    if (randomx_) {
         return randomx_->acceptedShares();
+    }
     return 0;
 }
 
 uint64_t MinerEngine::rejectedShares() const
 {
-    if (stratum_)
+    if (stratum_) {
         return stratum_->rejectedShares();
-    if (webchain_)
+    }
+    if (webchain_) {
         return webchain_->rejectedShares();
-    if (randomx_)
+    }
+    if (randomx_) {
         return randomx_->rejectedShares();
+    }
     return 0;
 }
 
 void MinerEngine::logHashrate(bool perThread) const
 {
     double total = 0.0;
-    for (double h : threadHashrates_)
+    for (double h : threadHashrates_) {
         total += h;
+    }
     logf(LogLevel::Notice, "speed: %.2f H/s, shares: %llu accepted / %llu rejected", total,
          static_cast<unsigned long long>(acceptedShares()),
          static_cast<unsigned long long>(rejectedShares()));
@@ -71,8 +78,9 @@ void MinerEngine::classicThreadLoop(int threadId)
                                     ? std::max<uint64_t>(16, 131072ull / config_.scryptN)
                                     : 2000000ull;
     std::unique_ptr<algo::ScryptEngine> scryptEngine;
-    if (config_.algo == Algorithm::Scrypt)
+    if (config_.algo == Algorithm::Scrypt) {
         scryptEngine = std::make_unique<algo::ScryptEngine>(config_.scryptN);
+    }
 
     while (!stopRequested_.load(std::memory_order_relaxed)) {
         uint64_t v = stratum_->snapshotWork(work);
@@ -99,7 +107,7 @@ void MinerEngine::classicThreadLoop(int threadId)
             continue;
         }
 
-        uint32_t maxNonce = static_cast<uint32_t>(std::min<uint64_t>(uint64_t(nonce) + batchSize, nonceRangeEnd));
+        uint32_t maxNonce = static_cast<uint32_t>(std::min<uint64_t>(static_cast<uint64_t>(nonce) + batchSize, nonceRangeEnd));
 
         uint64_t hashesDone = 0;
         auto t0 = std::chrono::steady_clock::now();
@@ -109,11 +117,13 @@ void MinerEngine::classicThreadLoop(int threadId)
                          : algo::scanHashSha256d(work.header.data(), work.target.data(), maxNonce, nonce, restart,
                                                   hashesDone);
         double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        if (elapsed > 0.0)
+        if (elapsed > 0.0) {
             threadHashrates_[static_cast<size_t>(threadId)] = hashesDone / elapsed;
+        }
 
-        if (found)
+        if (found) {
             stratum_->submitShare(work, nonce);
+        }
         nonce++;
     }
 }
@@ -151,11 +161,13 @@ void MinerEngine::webchainThreadLoop(int threadId)
         bool found = algo::scanHashLyra2Web(ctx, work.blob, work.lyra2Tcost, work.target.data(), maxNonce, nonce,
                                              restart, hashesDone, resultHash);
         double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        if (elapsed > 0.0)
+        if (elapsed > 0.0) {
             threadHashrates_[static_cast<size_t>(threadId)] = hashesDone / elapsed;
+        }
 
-        if (found)
+        if (found) {
             webchain_->submitShare(work, nonce, resultHash);
+        }
         nonce++;
     }
 }
@@ -186,8 +198,9 @@ void MinerEngine::randomXThreadLoop(int threadId)
             nonce = nonceStart;
             restart.store(false, std::memory_order_relaxed);
         }
-        if (nonce < nonceStart || nonce > nonceEnd)
+        if (nonce < nonceStart || nonce > nonceEnd) {
             nonce = nonceStart;
+        }
 
         const uint32_t maxNonce = (nonceEnd - nonce < batchSize - 1) ? nonceEnd : nonce + batchSize - 1;
         uint64_t hashesDone = 0;
@@ -202,24 +215,30 @@ void MinerEngine::randomXThreadLoop(int threadId)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
             continue;
         }
-        if (elapsed > 0.0)
+        if (elapsed > 0.0) {
             threadHashrates_[static_cast<size_t>(threadId)] = hashesDone / elapsed;
-        if (found)
+        }
+        if (found) {
             randomx_->submitShare(work, nonce, resultHash);
-        if (nonce == 0xffffffffu)
+        }
+        if (nonce == 0xffffffffu) {
             nonce = nonceStart;
-        else
+        }
+        else {
             ++nonce;
+        }
     }
 }
 
 void MinerEngine::run()
 {
     restartFlags_.reserve(static_cast<size_t>(config_.threads));
-    for (int i = 0; i < config_.threads; i++)
+    for (int i = 0; i < config_.threads; i++) {
         restartFlags_.push_back(std::make_unique<std::atomic<bool>>(false));
-    for (auto& f : restartFlags_)
+    }
+    for (auto& f : restartFlags_) {
         restartFlagPtrs_.push_back(f.get());
+    }
     threadHashrates_.assign(static_cast<size_t>(config_.threads), 0.0);
 
     if (config_.algo == Algorithm::Lyra2Web) {
@@ -266,22 +285,28 @@ void MinerEngine::run()
 
     logf(LogLevel::Notice, "starting %d miner thread(s) for algorithm %s", config_.threads,
          algorithmName(config_.algo));
-    if (config_.algo == Algorithm::Lyra2Web)
+    if (config_.algo == Algorithm::Lyra2Web) {
         logf(LogLevel::Notice, "lyra2web backend: %s", algo::lyra2WebActiveBackendName());
-    if (!config_.quiet && config_.hashrateIntervalSeconds > 0)
+    }
+    if (!config_.quiet && config_.hashrateIntervalSeconds > 0) {
         logf(LogLevel::Notice, "hashrate report every %d s (press 'h' for a snapshot)", config_.hashrateIntervalSeconds);
-    else if (!config_.quiet)
+    }
+    else if (!config_.quiet) {
         logf(LogLevel::Notice, "press 'h' for a hashrate snapshot");
+    }
 
     startConsoleKeyWatcher([this]() { hashrateSnapshotRequested_.store(true, std::memory_order_relaxed); });
 
     for (int i = 0; i < config_.threads; i++) {
-        if (config_.algo == Algorithm::Lyra2Web)
+        if (config_.algo == Algorithm::Lyra2Web) {
             workers_.emplace_back(&MinerEngine::webchainThreadLoop, this, i);
-        else if (config_.algo == Algorithm::RandomX)
+        }
+        else if (config_.algo == Algorithm::RandomX) {
             workers_.emplace_back(&MinerEngine::randomXThreadLoop, this, i);
-        else
+        }
+        else {
             workers_.emplace_back(&MinerEngine::classicThreadLoop, this, i);
+        }
     }
 
     auto lastReport = std::chrono::steady_clock::now();
@@ -295,8 +320,9 @@ void MinerEngine::run()
             break;
         }
 
-        if (hashrateSnapshotRequested_.exchange(false, std::memory_order_relaxed))
+        if (hashrateSnapshotRequested_.exchange(false, std::memory_order_relaxed)) {
             logHashrate(true);
+        }
 
         if (!config_.quiet && config_.hashrateIntervalSeconds > 0) {
             auto now = std::chrono::steady_clock::now();
@@ -314,15 +340,20 @@ void MinerEngine::run()
 void MinerEngine::stop()
 {
     stopRequested_ = true;
-    for (auto& t : workers_)
-        if (t.joinable())
+    for (auto& t : workers_) {
+        if (t.joinable()) {
             t.join();
-    if (stratum_)
+        }
+    }
+    if (stratum_) {
         stratum_->stop();
-    if (webchain_)
+    }
+    if (webchain_) {
         webchain_->stop();
-    if (randomx_)
+    }
+    if (randomx_) {
         randomx_->stop();
+    }
 
     uint64_t accepted = stratum_ ? stratum_->acceptedShares() :
                          (webchain_ ? webchain_->acceptedShares() : (randomx_ ? randomx_->acceptedShares() : 0));

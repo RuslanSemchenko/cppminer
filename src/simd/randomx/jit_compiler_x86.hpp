@@ -52,10 +52,10 @@ namespace randomx {
 		void generateSuperscalarHash(SuperscalarProgramList &programs, std::vector<uint64_t> &);
 		void generateDatasetInitCode();
 		ProgramFunc* getProgramFunc() {
-			return (ProgramFunc*)code;
+			return reinterpret_cast<ProgramFunc*>(code);
 		}
 		DatasetInitFunc* getDatasetInitFunc() {
-			return (DatasetInitFunc*)code;
+			return reinterpret_cast<DatasetInitFunc*>(code);
 		}
 		uint8_t* getCode() {
 			return code;

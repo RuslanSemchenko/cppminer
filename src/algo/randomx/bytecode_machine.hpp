@@ -204,7 +204,7 @@ namespace randomx {
 
 		static void exe_ISWAP_R(RANDOMX_EXE_ARGS) {
 			int_reg_t temp = *ibc.isrc;
-			*(int_reg_t*)ibc.isrc = *ibc.idst;
+			*const_cast<int_reg_t*>(ibc.isrc) = *ibc.idst;
 			*ibc.idst = temp;
 		}
 
@@ -271,7 +271,7 @@ namespace randomx {
 	protected:
 		static rx_vec_f128 maskRegisterExponentMantissa(ProgramConfiguration& config, rx_vec_f128 x) {
 			const rx_vec_f128 xmantissaMask = rx_set_vec_f128(dynamicMantissaMask, dynamicMantissaMask);
-			const rx_vec_f128 xexponentMask = rx_load_vec_f128((const double*)&config.eMask);
+			const rx_vec_f128 xexponentMask = rx_load_vec_f128(reinterpret_cast<const double*>(&config.eMask));
 			x = rx_and_vec_f128(x, xmantissaMask);
 			x = rx_or_vec_f128(x, xexponentMask);
 			return x;

@@ -31,6 +31,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "blake2/endian.h"
 #include <iostream>
 #include <vector>
+#include <array>
 #include <algorithm>
 #include <stdexcept>
 #include <iomanip>
@@ -41,6 +42,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace randomx {
 
+	namespace {
 	static bool isMultiplication(SuperscalarInstructionType type) {
 		return type == SuperscalarInstructionType::IMUL_R || type == SuperscalarInstructionType::IMULH_R || type == SuperscalarInstructionType::ISMULH_R || type == SuperscalarInstructionType::IMUL_RCP;
 	}
@@ -62,14 +64,18 @@ namespace randomx {
 	//Macro-op can consist of 1 or 2 uOPs.
 	class MacroOp {
 	public:
-		MacroOp(const char* name, int size)
+		MacroOp() noexcept
+			: name_(nullptr), size_(0), latency_(0), uop1_(ExecutionPort::Null), uop2_(ExecutionPort::Null) {}
+		MacroOp(const char* name, int size) noexcept
 			: name_(name), size_(size), latency_(0), uop1_(ExecutionPort::Null), uop2_(ExecutionPort::Null) {}
-		MacroOp(const char* name, int size, int latency, ExecutionPort::type uop)
+		MacroOp(const char* name, int size, int latency, ExecutionPort::type uop) noexcept
 			: name_(name), size_(size), latency_(latency), uop1_(uop), uop2_(ExecutionPort::Null) {}
-		MacroOp(const char* name, int size, int latency, ExecutionPort::type uop1, ExecutionPort::type uop2)
+		MacroOp(const char* name, int size, int latency, ExecutionPort::type uop1, ExecutionPort::type uop2) noexcept
 			: name_(name), size_(size), latency_(latency), uop1_(uop1), uop2_(uop2) {}
-		MacroOp(const MacroOp& parent, bool dependent)
+		MacroOp(const MacroOp& parent, bool dependent) noexcept
 			: name_(parent.name_), size_(parent.size_), latency_(parent.latency_), uop1_(parent.uop1_), uop2_(parent.uop2_), dependent_(dependent) {}
+		MacroOp(const MacroOp&) noexcept = default;
+		MacroOp& operator=(const MacroOp&) noexcept = default;
 		const char* getName() const {
 			return name_;
 		}
@@ -157,7 +163,7 @@ namespace randomx {
 			return name_;
 		}
 		int getSize() const {
-			return ops_.size();
+			return opsCount_;
 		}
 		bool isSimple() const {
 			return getSize() == 1;
@@ -198,26 +204,27 @@ namespace randomx {
 	private:
 		const char* name_;
 		SuperscalarInstructionType type_;
-		std::vector<MacroOp> ops_;
+		std::array<MacroOp, 3> ops_{};
+		int opsCount_ = 0;
 		int latency_;
 		int resultOp_ = 0;
 		int dstOp_ = 0;
 		int srcOp_;
 
-		SuperscalarInstructionInfo(const char* name)
-			: name_(name), type_(SuperscalarInstructionType::INVALID), latency_(0) {}
-		SuperscalarInstructionInfo(const char* name, SuperscalarInstructionType type, const MacroOp& op, int srcOp)
-			: name_(name), type_(type), latency_(op.getLatency()), srcOp_(srcOp) {
-			ops_.push_back(MacroOp(op));
+		SuperscalarInstructionInfo(const char* name) noexcept
+			: name_(name), type_(SuperscalarInstructionType::INVALID), latency_(0), srcOp_(-1) {}
+		SuperscalarInstructionInfo(const char* name, SuperscalarInstructionType type, const MacroOp& op, int srcOp) noexcept
+			: name_(name), type_(type), ops_{op}, opsCount_(1), latency_(op.getLatency()), srcOp_(srcOp) {
 		}
 		template <size_t N>
-		SuperscalarInstructionInfo(const char* name, SuperscalarInstructionType type, const MacroOp(&arr)[N], int resultOp, int dstOp, int srcOp)
-			: name_(name), type_(type), latency_(0), resultOp_(resultOp), dstOp_(dstOp), srcOp_(srcOp) {
-			for (unsigned i = 0; i < N; ++i) {
-				ops_.push_back(MacroOp(arr[i]));
-				latency_ += ops_.back().getLatency();
-			}
+		SuperscalarInstructionInfo(const char* name, SuperscalarInstructionType type, const MacroOp(&arr)[N], int resultOp, int dstOp, int srcOp) noexcept
+			: name_(name), type_(type), opsCount_(static_cast<int>(N)), latency_(0), resultOp_(resultOp), dstOp_(dstOp), srcOp_(srcOp) {
+			static_assert(N <= 3, "Invalid array size");
 			static_assert(N > 1, "Invalid array size");
+			for (unsigned i = 0; i < N; ++i) {
+				ops_[i] = arr[i];
+				latency_ += ops_[i].getLatency();
+			}
 		}
 	};
 
@@ -254,7 +261,7 @@ namespace randomx {
 	public:
 		static const DecoderBuffer Default;
 		template <size_t N>
-		DecoderBuffer(const char* name, int index, const int(&arr)[N])
+		DecoderBuffer(const char* name, int index, const int(&arr)[N]) noexcept
 			: name_(name), index_(index), counts_(arr), opsCount_(N) {}
 		const int* getCounts() const {
 			return counts_;
@@ -292,7 +299,7 @@ namespace randomx {
 		int index_;
 		const int* counts_;
 		int opsCount_;
-		DecoderBuffer() : index_(-1) {}
+		DecoderBuffer() noexcept : name_(nullptr), index_(-1), counts_(nullptr), opsCount_(0) {}
 		static const DecoderBuffer decodeBuffer484;
 		static const DecoderBuffer decodeBuffer7333;
 		static const DecoderBuffer decodeBuffer3733;
@@ -573,7 +580,7 @@ namespace randomx {
 			canReuse_ = groupParIsSource_ = false;
 		}
 
-		SuperscalarInstruction(const SuperscalarInstructionInfo* info) : info_(info) {
+		SuperscalarInstruction(const SuperscalarInstructionInfo* info) noexcept : info_(info) {
 		}
 	};
 
@@ -649,6 +656,7 @@ namespace randomx {
 
 		return -1;
 	}
+	} // namespace
 
 	void generateSuperscalar(SuperscalarProgram& prog, Blake2Generator& gen) {
 
@@ -776,12 +784,16 @@ namespace randomx {
 				//  RegisterInfo.lastOpPar - the last operation source value (-1 = constant, 0-7 = register)
 				if (macroOpIndex == currentInstruction.getInfo().getResultOp()) {
 					int dst = currentInstruction.getDestination();
-					RegisterInfo& ri = registers[dst];
-					retireCycle = depCycle;
-					ri.latency = retireCycle;
-					ri.lastOpGroup = currentInstruction.getGroup();
-					ri.lastOpPar = currentInstruction.getGroupPar();
-					if (trace) std::cout << "; RETIRED at cycle " << retireCycle << std::endl;
+					if (dst >= 0 && dst < 8) {
+						RegisterInfo& ri = registers[dst];
+						retireCycle = depCycle;
+						ri.latency = retireCycle;
+						ri.lastOpGroup = currentInstruction.getGroup();
+						ri.lastOpPar = currentInstruction.getGroupPar();
+						if (trace) {
+							std::cout << "; RETIRED at cycle " << retireCycle << std::endl;
+						}
+					}
 				}
 				codeSize += mop.getSize();
 				bufferIndex++;

@@ -30,10 +30,12 @@ void logSetQuiet(bool quiet) { g_quiet = quiet; }
 
 void logMessage(LogLevel level, const std::string& msg)
 {
-    if (level == LogLevel::Debug && !g_debug)
+    if (level == LogLevel::Debug && !g_debug) {
         return;
-    if (level == LogLevel::Info && g_quiet)
+    }
+    if (level == LogLevel::Info && g_quiet) {
         return;
+    }
 
     std::time_t t = std::time(nullptr);
     std::tm tmBuf{};
@@ -52,10 +54,12 @@ void logMessage(LogLevel level, const std::string& msg)
 
 void logf(LogLevel level, const char* fmt, ...)
 {
-    if (level == LogLevel::Debug && !g_debug)
+    if (level == LogLevel::Debug && !g_debug) {
         return;
-    if (level == LogLevel::Info && g_quiet)
+    }
+    if (level == LogLevel::Info && g_quiet) {
         return;
+    }
 
     char buf[2048];
     va_list ap;

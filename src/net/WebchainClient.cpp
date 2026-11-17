@@ -30,8 +30,9 @@ void WebchainClient::stop()
 {
     stopRequested_ = true;
     running_ = false;
-    if (thread_.joinable())
+    if (thread_.joinable()) {
         thread_.join();
+    }
     socket_.disconnect();
 }
 
@@ -44,8 +45,9 @@ bool WebchainClient::hasWork() const
 uint64_t WebchainClient::snapshotWork(WebchainWork& out) const
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (!haveJob_)
+    if (!haveJob_) {
         return 0;
+    }
     out = currentWork_;
     return currentWork_.jobVersion;
 }
@@ -53,8 +55,9 @@ uint64_t WebchainClient::snapshotWork(WebchainWork& out) const
 bool WebchainClient::sendJson(const nlohmann::json& msg)
 {
     std::string body = msg.dump();
-    if (config_.protocolDump)
+    if (config_.protocolDump) {
         logf(LogLevel::Debug, "webchain -> %s", body.c_str());
+    }
     body += "\n";
     std::lock_guard<std::mutex> lock(sendMutex_);
     return socket_.sendAll(body.c_str(), body.size());
@@ -65,10 +68,12 @@ int WebchainClient::nextRequestId(bool trackAsSubmit)
     std::lock_guard<std::mutex> lock(mutex_);
     int id = ++seq_;
     if (trackAsSubmit) {
-        if (pendingSubmitIds_.size() < 64)
+        if (pendingSubmitIds_.size() < 64) {
             pendingSubmitIds_.push_back(id);
-        else
+        }
+        else {
             logf(LogLevel::Warning, "Webchain submit queue is full; response tracking degraded");
+        }
     }
     return id;
 }
@@ -77,8 +82,9 @@ bool WebchainClient::takeSubmitId(int id)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = std::find(pendingSubmitIds_.begin(), pendingSubmitIds_.end(), id);
-    if (it == pendingSubmitIds_.end())
+    if (it == pendingSubmitIds_.end()) {
         return false;
+    }
     pendingSubmitIds_.erase(it);
     return true;
 }
@@ -147,10 +153,12 @@ bool WebchainClient::parseJobLocked(const nlohmann::json& job, std::string& erro
         std::string lower = a;
         std::transform(lower.begin(), lower.end(), lower.begin(),
                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        if (lower.find("lyra2v2") != std::string::npos)
+        if (lower.find("lyra2v2") != std::string::npos) {
             tcost = 1;
-        else if (lower.find("lyra2") != std::string::npos)
+        }
+        else if (lower.find("lyra2") != std::string::npos) {
             tcost = 4;
+        }
         else {
             error = "unsupported Webchain algorithm '" + a + "'";
             return false;
@@ -164,8 +172,9 @@ bool WebchainClient::parseJobLocked(const nlohmann::json& job, std::string& erro
         return false;
     }
     bool targetIsZero = true;
-    for (uint8_t byte : w.target)
+    for (uint8_t byte : w.target) {
         targetIsZero = targetIsZero && byte == 0;
+    }
     if (targetIsZero) {
         error = "malformed Webchain job (target must be non-zero)";
         return false;
@@ -182,13 +191,14 @@ bool WebchainClient::parseJobLocked(const nlohmann::json& job, std::string& erro
 void WebchainClient::handleJobPush(const nlohmann::json& params)
 {
     std::string error;
-    bool ok;
+    bool ok = false;
     std::string jobId;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         ok = parseJobLocked(params, error);
-        if (ok)
+        if (ok) {
             jobId = currentWork_.jobId;
+        }
     }
     if (!ok) {
         logf(LogLevel::Warning, "%s, ignoring job push", error.c_str());
@@ -197,15 +207,19 @@ void WebchainClient::handleJobPush(const nlohmann::json& params)
     logf(LogLevel::Debug, "new Webchain job %s", jobId.c_str());
     // Webchain jobs have no clean_jobs flag - every push is effectively a
     // fresh block template, so always abort any in-flight scan.
-    for (auto* f : restartFlags_)
-        if (f) f->store(true, std::memory_order_relaxed);
+    for (auto* f : restartFlags_) {
+        if (f) {
+            f->store(true, std::memory_order_relaxed);
+        }
+    }
 }
 
 void WebchainClient::handleKeepalivedPush(const nlohmann::json& msg)
 {
     int echoId = 1;
-    if (msg.contains("id") && msg["id"].is_number_integer())
+    if (msg.contains("id") && msg["id"].is_number_integer()) {
         echoId = msg["id"].get<int>();
+    }
     std::string rpcId;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -223,7 +237,7 @@ void WebchainClient::onShareResult(bool accepted, const std::string& reason)
         accepted_++;
         logf(LogLevel::Info, "share accepted (%llu/%llu)",
              static_cast<unsigned long long>(accepted_.load()),
-             static_cast<unsigned long long>(accepted_.load() + rejected_.load()));
+             static_cast<unsigned long long>(accepted_.load()) + static_cast<unsigned long long>(rejected_.load()));
     } else {
         rejected_++;
         logf(LogLevel::Warning, "share rejected%s%s", reason.empty() ? "" : ": ", reason.c_str());
@@ -252,14 +266,16 @@ void WebchainClient::handleResponse(const nlohmann::json& msg)
 
         const auto& result = msg["result"];
         std::string jobError;
-        bool jobOk;
+        bool jobOk = false;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            if (result.contains("id") && result["id"].is_string())
+            if (result.contains("id") && result["id"].is_string()) {
                 rpcId_ = result["id"].get<std::string>();
+            }
             jobOk = result.contains("job") ? parseJobLocked(result["job"], jobError) : false;
-            if (!result.contains("job"))
+            if (!result.contains("job")) {
                 jobError = "login response has no job";
+            }
             if (jobOk) {
                 seq_ = 1; // login consumed id 1; the next generated id is 2
                 pendingSubmitIds_.clear();
@@ -270,11 +286,13 @@ void WebchainClient::handleResponse(const nlohmann::json& msg)
         return;
     }
 
-    if (!msg.contains("id") || msg["id"].is_null() || !msg["id"].is_number_integer())
+    if (!msg.contains("id") || msg["id"].is_null() || !msg["id"].is_number_integer()) {
         return;
+    }
     int id = msg["id"].get<int>();
-    if (!takeSubmitId(id))
+    if (!takeSubmitId(id)) {
         return; // not one of our pending submits (e.g. a stray keepalive echo)
+    }
 
     bool hasError = msg.contains("error") && !msg["error"].is_null();
     if (hasError) {
@@ -304,8 +322,9 @@ void WebchainClient::handleResponse(const nlohmann::json& msg)
 
 void WebchainClient::handleLine(const std::string& line)
 {
-    if (config_.protocolDump)
+    if (config_.protocolDump) {
         logf(LogLevel::Debug, "webchain <- %s", line.c_str());
+    }
 
     nlohmann::json msg;
     try {
@@ -314,8 +333,9 @@ void WebchainClient::handleLine(const std::string& line)
         logf(LogLevel::Debug, "ignoring non-JSON webchain line");
         return;
     }
-    if (!msg.is_object())
+    if (!msg.is_object()) {
         return;
+    }
 
     if (msg.contains("method") && msg["method"].is_string()) {
         std::string method = msg["method"].get<std::string>();
@@ -332,25 +352,30 @@ void WebchainClient::handleLine(const std::string& line)
 
 int WebchainClient::pumpSocket(int waitMs)
 {
-    if (!socket_.waitReadable(waitMs))
+    if (!socket_.waitReadable(waitMs)) {
         return 0; // timeout, connection still fine
+    }
 
     char buf[4096];
     int n = socket_.recvSome(buf, sizeof(buf));
-    if (n < 0)
+    if (n < 0) {
         return -1;
-    if (n == 0)
+    }
+    if (n == 0) {
         return 0;
+    }
 
     recvBuffer_.append(buf, static_cast<size_t>(n));
-    size_t pos;
+    size_t pos = 0;
     while ((pos = recvBuffer_.find('\n')) != std::string::npos) {
         std::string line = recvBuffer_.substr(0, pos);
         recvBuffer_.erase(0, pos + 1);
-        if (!line.empty() && line.back() == '\r')
+        if (!line.empty() && line.back() == '\r') {
             line.pop_back();
-        if (!line.empty())
+        }
+        if (!line.empty()) {
             handleLine(line);
+        }
     }
     return n;
 }
@@ -380,8 +405,9 @@ bool WebchainClient::connectAndLogin(std::string& error)
         return false;
     }
 
-    if (!socket_.connect(url, 30, error, config_.tls))
+    if (!socket_.connect(url, 30, error, config_.tls)) {
         return false;
+    }
 
     recvBuffer_.clear();
     {
@@ -447,15 +473,16 @@ void WebchainClient::threadMain()
         attempt = 0;
         running_ = true;
         logf(LogLevel::Notice, "connected to %s, logged in as %s", config_.url.c_str(), config_.user.c_str());
-        for (auto* f : restartFlags_)
-            if (f) f->store(true, std::memory_order_relaxed);
+        for (auto* f : restartFlags_) {
+            if (f) {
+                f->store(true, std::memory_order_relaxed);
+            }
+        }
 
         auto lastActivity = std::chrono::steady_clock::now();
-        bool alive = true;
-        while (alive && !stopRequested_.load()) {
+        while (!stopRequested_.load()) {
             int n = pumpSocket(1000);
             if (n < 0) {
-                alive = false;
                 break;
             }
             auto now = std::chrono::steady_clock::now();
@@ -475,8 +502,9 @@ void WebchainClient::threadMain()
         }
 
         running_ = false;
-        if (!stopRequested_.load())
+        if (!stopRequested_.load()) {
             logf(LogLevel::Warning, "disconnected from pool, reconnecting...");
+        }
         socket_.disconnect();
         {
             std::lock_guard<std::mutex> lock(mutex_);
