@@ -38,6 +38,9 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh ${{ env.LLVM_VERSION }}
+          # llvm.sh installs clang-23 but does not create unversioned alternatives.
+          # Install the meta-package so that `clang` / `clang++` point to clang-23.
+          sudo apt-get install -y clang clang++
 
       - name: Install LLVM 23 on macOS
         if: runner.os == 'macOS'
@@ -49,7 +52,7 @@ jobs:
       - name: Install LLVM 23 on Windows
         if: runner.os == 'Windows'
         shell: pwsh
-        run: choco install llvm --version ${{ env.LLVM_VERSION }}
+        run: choco install llvm
 
       - name: Verify Clang version on Unix
         if: runner.os != 'Windows'
@@ -244,6 +247,8 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh ${{ env.LLVM_VERSION }}
+          # llvm.sh installs clang-23 but does not create unversioned alternatives.
+          sudo apt-get install -y clang clang++
 
       - name: Install dependencies
         shell: bash
